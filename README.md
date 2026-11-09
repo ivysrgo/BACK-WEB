@@ -64,11 +64,6 @@ PORT=3000
 # =========================================================================
 MONGO_URI=mongodb+srv://<USUARIO>:<PASSWORD>@cluster0.tucluster.mongodb.net/ecogolgi_db?retryWrites=true&w=majority
 
-# =========================================================================
-# OPCIÓN LOCAL ALTERNATIVA: MongoDB Compass / Localhost
-# =========================================================================
-# MONGO_URI=mongodb://127.0.0.1:27017/ecogolgi_db
-```
 
 ---
 
