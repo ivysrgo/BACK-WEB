@@ -54,16 +54,20 @@ BACK-WEB/
 
 ## ⚙️ Configuración y Variables de Entorno
 
-Crea o revisa tu archivo `.env` en la raíz del proyecto:
+El backend está configurado por defecto para conectarse a **MongoDB Atlas (en la nube)**. Revisa tu archivo `.env`:
 
 ```env
 PORT=3000
 
-# OPCIÓN 1: Conexión local para MongoDB Compass (activa por defecto)
-MONGO_URI=mongodb://127.0.0.1:27017/ecogolgi_db
+# =========================================================================
+# CONEXIÓN PRINCIPAL: MongoDB Atlas (Nube)
+# =========================================================================
+MONGO_URI=mongodb+srv://<USUARIO>:<PASSWORD>@cluster0.tucluster.mongodb.net/ecogolgi_db?retryWrites=true&w=majority
 
-# OPCIÓN 2: Conexión a MongoDB Atlas (descomentar y configurar con tus credenciales)
-# MONGO_URI=mongodb+srv://<USUARIO>:<PASSWORD>@cluster0.tucluster.mongodb.net/ecogolgi_db?retryWrites=true&w=majority
+# =========================================================================
+# OPCIÓN LOCAL ALTERNATIVA: MongoDB Compass / Localhost
+# =========================================================================
+# MONGO_URI=mongodb://127.0.0.1:27017/ecogolgi_db
 ```
 
 ---
