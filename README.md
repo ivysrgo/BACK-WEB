@@ -1,6 +1,5 @@
 # BACK-WEB · Eco-Golgi / Unidona API 🌿👕
 
-Backend robusto desarrollado en **Node.js**, **Express** y **MongoDB (Mongoose)** para la plataforma universitaria sustentable **Eco-Golgi / Unidona** (donación e intercambio de prendas de vestir y artículos de segunda vida).
 
 El proyecto sigue estrictamente la **arquitectura por capas** desacoplada de la plantilla `minicrud-express`.
 
