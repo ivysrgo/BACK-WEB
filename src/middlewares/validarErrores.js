@@ -10,7 +10,8 @@ function validarCreacionPublicacion(req, res, next) {
   const condition = body.condition || body.estado || body.estadoFisico || 'Buen Estado';
   const description = body.description || body.descripcion || '';
   const details = body.details || body.detalles || '';
-  const author = body.author || body.autor || 'Juan José Perez Cespedes';
+  const author = req.usuario?.nombre || body.author || body.autor || 'Juan José Perez Cespedes';
+  const usuarioId = req.usuario?.id || body.usuarioId || null;
   const imageUrl = body.imageUrl || body.imagenUrl || body.imagen;
   const talla = body.talla || '';
   const genero = body.genero || '';
@@ -33,6 +34,7 @@ function validarCreacionPublicacion(req, res, next) {
     description: description.trim(),
     details: details.trim(),
     author: author.trim(),
+    usuarioId,
     imageUrl: imageUrl && typeof imageUrl === 'string' && imageUrl.trim().length > 0 ? imageUrl.trim() : undefined,
     talla: talla.trim(),
     genero: genero.trim(),
@@ -138,8 +140,28 @@ function validarRegistro(req, res, next) {
     throw new HttpError(400, 'El correo electrónico no es válido');
   }
 
-  if (!contrasena || typeof contrasena !== 'string' || contrasena.length < 6) {
-    throw new HttpError(400, 'La contraseña es obligatoria y debe tener al menos 6 caracteres');
+  if (!contrasena || typeof contrasena !== 'string') {
+    throw new HttpError(400, 'La contraseña es obligatoria');
+  }
+
+  if (contrasena.length < 5) {
+    throw new HttpError(400, 'La contraseña debe tener como mínimo 5 caracteres');
+  }
+
+  if (!/[A-Z]/.test(contrasena)) {
+    throw new HttpError(400, 'La contraseña debe contener al menos una letra mayúscula');
+  }
+
+  if (!/[a-z]/.test(contrasena)) {
+    throw new HttpError(400, 'La contraseña debe contener al menos una letra minúscula');
+  }
+
+  if (!/[0-9]/.test(contrasena)) {
+    throw new HttpError(400, 'La contraseña debe contener al menos un número');
+  }
+
+  if (!/[^A-Za-z0-9]/.test(contrasena)) {
+    throw new HttpError(400, 'La contraseña debe contener al menos un carácter especial');
   }
 
   req.body.nombre = nombre.trim();

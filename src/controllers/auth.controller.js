@@ -13,8 +13,17 @@ async function login(req, res, next) {
 async function registrar(req, res, next) {
   try {
     const { nombre, correo, contrasena, phone } = req.body;
-    const usuario = await servicio.registrar({ nombre, correo, contrasena, phone });
-    res.status(201).json({ usuario });
+    const resultado = await servicio.registrar({ nombre, correo, contrasena, phone });
+    res.status(201).json(resultado);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function perfil(req, res, next) {
+  try {
+    const usuario = await servicio.obtenerPerfil(req.usuario.id);
+    res.status(200).json({ usuario });
   } catch (error) {
     next(error);
   }
@@ -71,6 +80,7 @@ async function resetPassword(req, res, next) {
 module.exports = {
   login,
   registrar,
+  perfil,
   forgotPassword,
   verifyCode,
   resetPassword,

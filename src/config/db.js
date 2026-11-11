@@ -1,4 +1,13 @@
 const mongoose = require('mongoose');
+const dns = require('dns');
+
+// En entornos Windows, las consultas SRV de MongoDB Atlas a veces fallan con ECONNREFUSED
+// Configurar servidores DNS públicos confiables (Google / Cloudflare) resuelve este problema.
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch {
+  // Ignorar si el entorno del sistema no permite reasignar servidores DNS
+}
 
 async function connectDB() {
   try {
@@ -11,12 +20,13 @@ async function connectDB() {
 
     if (uri.includes('<USUARIO>') || uri.includes('<PASSWORD>')) {
       console.error('⚠️ ATENCIÓN: Debes reemplazar <USUARIO> y <PASSWORD> en tu archivo .env con tus credenciales de MongoDB Atlas.');
-      console.error('Ejemplo: MONGO_URI=mongodb+srv://admin:MiClaveSegura123@cluster0.abcde.mongodb.net/ecogolgi_db?retryWrites=true&w=majority\n');
       process.exit(1);
     }
 
-    const conn = await mongoose.connect(uri);
-    console.log(`🌐 MongoDB Atlas Conectado exitosamente: ${conn.connection.host}/${conn.connection.name}`);
+    const conn = await mongoose.connect(uri, {
+      dbName: 'ecogolgi',
+    });
+    console.log(`🌐 MongoDB Atlas conectado exitosamente: ${conn.connection.host}/${conn.connection.name}`);
     return conn;
   } catch (error) {
     console.error('❌ Error al conectar con MongoDB Atlas:', error.message);

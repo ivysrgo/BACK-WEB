@@ -115,11 +115,12 @@ Una vez iniciado el servidor, accede a la interfaz interactiva para probar todos
 
 | Método | Endpoint | Descripción | Body Requerido |
 | :--- | :--- | :--- | :--- |
-| `POST` | `/api/auth/login` | Iniciar sesión (control de intentos y bloqueo) | `{ correo, contrasena }` |
-| `POST` | `/api/auth/register` | Registro de nuevos usuarios | `{ nombre, correo, contrasena, phone }` |
+| `POST` | `/api/auth/login` | Iniciar sesión (genera JWT, control de intentos y bloqueo) | `{ correo, contrasena }` |
+| `POST` | `/api/auth/register` | Registro de nuevos usuarios (rol `user`) | `{ nombre, correo, contrasena, phone }` |
+| `GET`  | `/api/auth/me` | Obtener perfil del usuario autenticado (requiere Bearer token) | Header `Authorization: Bearer <token>` |
 | `POST` | `/api/auth/forgot-password`| Solicitar PIN de recuperación | `{ correo }` |
 | `POST` | `/api/auth/verify-code` | Verificar PIN de 4 dígitos | `{ correo, pin }` |
-| `POST` | `/api/auth/reset-password` | Restablecer contraseña | `{ correo, pin, nuevaContrasena }` |
+| `POST` | `/api/auth/reset-password` | Restablecer contraseña y desbloquear cuenta | `{ correo, pin, nuevaContrasena }` |
 
 ### 3. Solicitudes (`/api/solicitudes`)
 
@@ -133,10 +134,18 @@ Una vez iniciado el servidor, accede a la interfaz interactiva para probar todos
 
 ---
 
-## 👤 Usuario Semilla por Defecto
+## 👥 Usuarios Semilla por Defecto en MongoDB Atlas
 
-Para pruebas inmediatas sin necesidad de registro previo:
+El sistema incluye dos tipos de usuarios sembrados con contraseñas encriptadas con **bcrypt**:
+
+### 1. 🛡️ Administrador (Acceso al panel administrativo y métricas)
+* **Correo:** `admin@ecogolgi.com`
+* **Contraseña:** `Admin123*`
+* **Nombre:** `Administrador Eco-Golgi`
+* **Rol:** `admin` (Redirección a `/admin/explorar`)
+
+### 2. 👤 Usuario Regular (Comunidad / Donador)
 * **Correo:** `juanelpro2005@gmail.com`
 * **Contraseña:** `123456`
 * **Nombre:** `Juan José Perez Cespedes`
-* **Rol:** `Miembro de la comunidad`
+* **Rol:** `user` (Redirección a `/explorar`)

@@ -56,6 +56,11 @@ const publicacionSchema = new mongoose.Schema(
       default: 'Juan José Perez Cespedes',
       trim: true,
     },
+    usuarioId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Usuario',
+      default: null,
+    },
     publishedAt: {
       type: String,
       default: () => new Date().toISOString().split('T')[0],

@@ -299,6 +299,17 @@ module.exports = {
         },
       },
     },
+    '/auth/me': {
+      get: {
+        tags: ['Autenticación'],
+        summary: 'Obtener usuario autenticado actual a partir del token JWT',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Datos del usuario autenticado' },
+          401: { description: 'Token no proporcionado o inválido' },
+        },
+      },
+    },
     '/auth/forgot-password': {
       post: {
         tags: ['Autenticación'],
