@@ -19,13 +19,6 @@ module.exports = {
     { name: 'Salud', description: 'Comprobación de estado del servicio' },
   ],
   components: {
-    securitySchemes: {
-      bearerAuth: {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-      },
-    },
     schemas: {
       Publicacion: {
         type: 'object',
@@ -40,10 +33,9 @@ module.exports = {
           requests: { type: 'integer', example: 4 },
           status: { type: 'string', enum: ['Disponible', 'Reservado', 'Donado', 'Caducado'], example: 'Disponible' },
           daysElapsed: { type: 'integer', example: 12 },
-          imageUrl: { type: 'string', description: 'URL de la imagen de portada, que corresponde a la primera imagen subida.', example: '/uploads/publicaciones/672f6a15f9a0c1a2e3b4c5d6/foto.jpg' },
-          imageUrls: { type: 'array', description: 'URLs de las imágenes en el orden en que se subieron.', items: { type: 'string' } },
+          imageUrl: { type: 'string', example: 'https://images.unsplash.com/photo-1576995853123-5a10305d93c0?w=500' },
+          imageUrls: { type: 'array', items: { type: 'string' }, description: 'URLs de las fotografías; imageUrl contiene la portada.' },
           author: { type: 'string', example: 'Camila Rojas' },
-          usuarioId: { type: 'string', example: '672f6a15f9a0c1a2e3b4c5d8', nullable: true },
           publishedAt: { type: 'string', example: '2026-10-14' },
           tags: { type: 'array', items: { type: 'string' }, example: ['chaqueta', 'jean'] },
           talla: { type: 'string', example: 'M' },
@@ -56,19 +48,19 @@ module.exports = {
       },
       NuevaPublicacion: {
         type: 'object',
-        required: ['title', 'images'],
+        required: ['title'],
         properties: {
           title: { type: 'string', minLength: 3, example: 'Chaqueta de Jean Oversize' },
           category: { type: 'string', example: 'ROPA' },
           modality: { type: 'string', enum: ['Donación', 'Intercambio'], example: 'Intercambio' },
           condition: { type: 'string', example: 'Como nuevo' },
           description: { type: 'string', example: 'Chaqueta de corte amplio.' },
+          imageUrl: { type: 'string', example: 'https://images.unsplash.com/photo-1576995853123-5a10305d93c0' },
           images: {
             type: 'array',
-            minItems: 1,
             maxItems: 5,
-            description: 'Imágenes JPG o PNG codificadas como data URL base64. Máximo 5 MB por imagen y 20 MB en total.',
-            items: { type: 'string', format: 'byte', example: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ...' },
+            items: { type: 'string', description: 'Imagen JPG o PNG codificada como data URL.' },
+            description: 'Hasta 5 imágenes de máximo 5 MB cada una y 20 MB en total.',
           },
           tags: { type: 'array', items: { type: 'string' } },
           talla: { type: 'string', example: 'M' },
@@ -177,8 +169,7 @@ module.exports = {
       },
       post: {
         tags: ['Publicaciones / Artículos'],
-        summary: 'Crear una publicación para el usuario autenticado',
-        security: [{ bearerAuth: [] }],
+        summary: 'Crear una nueva publicación',
         requestBody: {
           required: true,
           content: {
@@ -204,28 +195,6 @@ module.exports = {
               },
             },
           },
-          401: { description: 'Token no proporcionado o inválido' },
-        },
-      },
-    },
-    '/publicaciones/mis-publicaciones': {
-      get: {
-        tags: ['Publicaciones / Artículos'],
-        summary: 'Listar las publicaciones del usuario autenticado',
-        security: [{ bearerAuth: [] }],
-        responses: {
-          200: {
-            description: 'Publicaciones propias ordenadas de más reciente a más antigua',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'array',
-                  items: { $ref: '#/components/schemas/Publicacion' },
-                },
-              },
-            },
-          },
-          401: { description: 'Token no proporcionado o inválido' },
         },
       },
     },
@@ -246,8 +215,7 @@ module.exports = {
       },
       put: {
         tags: ['Publicaciones / Artículos'],
-        summary: 'Actualizar publicación propia (o cualquier publicación si es administrador)',
-        security: [{ bearerAuth: [] }],
+        summary: 'Actualizar publicación completa',
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         requestBody: {
           required: true,
@@ -262,8 +230,7 @@ module.exports = {
       },
       patch: {
         tags: ['Publicaciones / Artículos'],
-        summary: 'Actualizar campos parciales de una publicación propia (o de cualquier publicación si es administrador)',
-        security: [{ bearerAuth: [] }],
+        summary: 'Actualizar campos parciales de una publicación (ej: cambiar status)',
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         requestBody: {
           required: true,
@@ -285,8 +252,7 @@ module.exports = {
       },
       delete: {
         tags: ['Publicaciones / Artículos'],
-        summary: 'Eliminar publicación propia (o cualquier publicación si es administrador)',
-        security: [{ bearerAuth: [] }],
+        summary: 'Eliminar una publicación',
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         responses: {
           204: { description: 'Eliminada con éxito (sin contenido)' },

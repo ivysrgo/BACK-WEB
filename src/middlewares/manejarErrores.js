@@ -52,14 +52,6 @@ function manejarErrores(err, req, res, next) {
     });
   }
 
-  if (err.type === 'entity.too.large') {
-    const mensaje = 'El tamaño total de las imágenes no debe superar 20 MB.';
-    return res.status(413).json({
-      error: mensaje,
-      mensaje,
-    });
-  }
-
   // 6. Error interno no controlado
   console.error('Error no controlado en el servidor:', err);
   const mensajeServidor = 'Error interno del servidor.';

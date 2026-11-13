@@ -1,66 +1,29 @@
 const Publicacion = require('../models/publicacion.models');
 const HttpError = require('../utils/HttpError');
-const fs = require('fs/promises');
-const path = require('path');
-const crypto = require('crypto');
-
-function escaparRegExp(valor) {
-  return valor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function esAdministrador(usuario) {
-  return usuario.role === 'admin' || usuario.role === 'Administrador';
-}
-
-function verificarPropietario(publicacion, usuario) {
-  if (esAdministrador(usuario)) return;
-  if (String(publicacion.usuarioId) !== String(usuario._id)) {
-    throw new HttpError(404, 'Publicación no encontrada');
-  }
-}
-
-function leerFiltroTexto(valor, campo) {
-  if (valor === undefined) return undefined;
-  if (typeof valor !== 'string') {
-    throw new HttpError(400, `El filtro ${campo} debe ser texto`);
-  }
-  return valor.trim();
-}
+const { guardarImagenesPublicacion, eliminarImagenesPublicacion } = require('../utils/imagenesPublicacion');
 
 async function listar(filtros = {}) {
   const query = {};
-  const categoria = leerFiltroTexto(filtros.categoria, 'categoria');
-  const estado = leerFiltroTexto(filtros.estado, 'estado');
-  const modalidad = leerFiltroTexto(filtros.modalidad, 'modalidad');
 
   // Filtro por categoría (ej: 'ROPA', 'LIBROS', 'CALZADO')
-  if (categoria && categoria.toLowerCase() !== 'todas') {
-    const categoriaNormalizada = categoria.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    const aliases = {
-      ropa: /^ROPA$/i,
-      libros: /^LIBROS?$/i,
-      utiles: /^[ÚU]?TILES?(?: ESCOLARES?)?$/i,
-      'utiles escolares': /^[ÚU]?TILES?(?: ESCOLARES?)?$/i,
-      muebles: /^MUEBLES?(?: PEQUEÑOS?)?$/i,
-      'muebles pequenos': /^MUEBLES?(?: PEQUEÑOS?)?$/i,
-    };
-    query.category = aliases[categoriaNormalizada] || new RegExp(`^${escaparRegExp(categoria)}$`, 'i');
+  if (filtros.categoria && filtros.categoria !== 'Todas' && filtros.categoria !== 'TODAS') {
+    query.category = new RegExp(`^${filtros.categoria.trim()}$`, 'i');
   }
 
   // Filtro por estado (ej: 'Disponible', 'Reservado', 'Donado', 'Caducado')
-  if (estado && estado.toLowerCase() !== 'todos') {
-    query.status = estado;
+  if (filtros.estado && filtros.estado !== 'Todos' && filtros.estado !== 'TODOS') {
+    query.status = filtros.estado;
   }
 
   // Filtro por modalidad (ej: 'Donación', 'Intercambio')
-  if (modalidad && modalidad.toLowerCase() !== 'todas') {
-    query.modality = new RegExp(`^${escaparRegExp(modalidad)}$`, 'i');
+  if (filtros.modalidad && filtros.modalidad !== 'Todas') {
+    query.modality = new RegExp(`^${filtros.modalidad.trim()}$`, 'i');
   }
 
   // Búsqueda general (q o busqueda)
-  const termino = leerFiltroTexto(filtros.q ?? filtros.busqueda, 'q');
-  if (termino) {
-    const regExp = new RegExp(escaparRegExp(termino), 'i');
+  const termino = filtros.q || filtros.busqueda;
+  if (termino && termino.trim() !== '') {
+    const regExp = new RegExp(termino.trim(), 'i');
     query.$or = [
       { title: regExp },
       { description: regExp },
@@ -74,10 +37,6 @@ async function listar(filtros = {}) {
   return await Publicacion.find(query).sort({ createdAt: -1 });
 }
 
-async function listarPorUsuario(usuarioId) {
-  return await Publicacion.find({ usuarioId }).sort({ createdAt: -1 });
-}
-
 async function obtener(id) {
   const publicacion = await Publicacion.findById(id);
   if (!publicacion) {
@@ -86,85 +45,44 @@ async function obtener(id) {
   return publicacion;
 }
 
-async function guardarImagenes(images, publicacionId) {
-  const directorio = path.join(__dirname, '..', '..', 'uploads', 'publicaciones', String(publicacionId));
-  await fs.mkdir(directorio, { recursive: true });
-  const urls = [];
+async function crear(datos) {
+  const { images, ...datosPublicacion } = datos;
+  const imagenesGuardadas = images?.length
+    ? await guardarImagenesPublicacion(images)
+    : [];
+  const urls = imagenesGuardadas.map((imagen) => imagen.url);
 
   try {
-    for (const imagen of images) {
-      const [, tipo, contenido] = imagen.match(/^data:image\/(jpeg|png);base64,([A-Za-z0-9+/]+={0,2})$/);
-      const buffer = Buffer.from(contenido, 'base64');
-      const firmaValida = tipo === 'png'
-        ? buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
-        : buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-
-      if (!firmaValida) {
-        throw new HttpError(400, 'El contenido de una imagen no coincide con su formato');
-      }
-
-      const nombre = `${crypto.randomUUID()}.${tipo === 'jpeg' ? 'jpg' : 'png'}`;
-      await fs.writeFile(path.join(directorio, nombre), buffer, { flag: 'wx' });
-      urls.push(`/uploads/publicaciones/${publicacionId}/${nombre}`);
-    }
-    return urls;
+    const nueva = new Publicacion({
+      ...datosPublicacion,
+      ...(urls.length > 0 ? { imageUrl: urls[0], imageUrls: urls } : {}),
+    });
+    return await nueva.save();
   } catch (error) {
-    await fs.rm(directorio, { recursive: true, force: true });
+    await eliminarImagenesPublicacion(imagenesGuardadas);
     throw error;
   }
 }
 
-async function crear(datos, usuario) {
-  const { images = [], ...campos } = datos;
-  const nueva = new Publicacion({
-    ...campos,
-    author: usuario.nombre,
-    usuarioId: usuario._id,
-    status: 'Disponible',
-    requests: 0,
-    daysElapsed: 0,
+async function actualizar(id, cambios) {
+  const actualizada = await Publicacion.findByIdAndUpdate(id, cambios, {
+    new: true,
+    runValidators: true,
   });
 
-  if (images.length > 0) {
-    nueva.imageUrls = await guardarImagenes(images, nueva.id);
-    nueva.imageUrl = nueva.imageUrls[0];
-    try {
-      return await nueva.save();
-    } catch (error) {
-      await fs.rm(
-        path.join(__dirname, '..', '..', 'uploads', 'publicaciones', String(nueva.id)),
-        { recursive: true, force: true }
-      );
-      throw error;
-    }
-  }
-  return await nueva.save();
-}
-
-async function actualizar(id, cambios, usuario) {
-  const publicacion = await Publicacion.findById(id);
-  if (!publicacion) {
+  if (!actualizada) {
     throw new HttpError(404, 'Publicación no encontrada');
   }
 
-  verificarPropietario(publicacion, usuario);
-  Object.assign(publicacion, cambios);
-  return await publicacion.save();
+  return actualizada;
 }
 
-async function eliminar(id, usuario) {
-  const publicacion = await Publicacion.findById(id);
-  if (!publicacion) {
+async function eliminar(id) {
+  const eliminada = await Publicacion.findByIdAndDelete(id);
+  if (!eliminada) {
     throw new HttpError(404, 'Publicación no encontrada');
   }
-
-  verificarPropietario(publicacion, usuario);
-  await publicacion.deleteOne();
-  await fs.rm(
-    path.join(__dirname, '..', '..', 'uploads', 'publicaciones', String(publicacion.id)),
-    { recursive: true, force: true }
-  );
-  return publicacion;
+  return eliminada;
 }
 
 // Sembrar datos iniciales si la colección está vacía
@@ -282,7 +200,6 @@ async function sembrarDatosIniciales() {
 
 module.exports = {
   listar,
-  listarPorUsuario,
   obtener,
   crear,
   actualizar,

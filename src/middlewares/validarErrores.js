@@ -4,65 +4,29 @@ function validarCreacionPublicacion(req, res, next) {
   const body = req.body ?? {};
 
   // Soporte bidireccional (español e inglés)
-  const title = body.title ?? body.titulo;
-  const category = body.category ?? body.categoria ?? body.categoriaPrenda ?? 'ROPA';
-  const modality = body.modality ?? body.modalidad ?? 'Donación';
-  const condition = body.condition ?? body.estado ?? body.estadoFisico ?? 'Buen Estado';
-  const description = body.description ?? body.descripcion ?? '';
-  const details = body.details ?? body.detalles ?? '';
-  const imageUrl = body.imageUrl ?? body.imagenUrl ?? body.imagen;
+  const title = body.title || body.titulo;
+  const category = body.category || body.categoria || body.categoriaPrenda || 'ROPA';
+  const modality = body.modality || body.modalidad || 'Donación';
+  const condition = body.condition || body.estado || body.estadoFisico || 'Buen Estado';
+  const description = body.description || body.descripcion || '';
+  const details = body.details || body.detalles || '';
+  const author = req.usuario?.nombre || body.author || body.autor || 'Juan José Perez Cespedes';
+  const usuarioId = req.usuario?.id || body.usuarioId || null;
+  const imageUrl = body.imageUrl || body.imagenUrl || body.imagen;
   const images = body.images;
-  const talla = body.talla ?? '';
-  const genero = body.genero ?? '';
-  const clima = body.clima ?? '';
-  const autorizaDonacion = body.autorizaDonacion ?? true;
-  const tags = body.tags ?? [];
-
-  for (const [field, value] of Object.entries({
-    category, modality, condition, description, details, talla, genero, clima,
-  })) {
-    if (typeof value !== 'string') {
-      throw new HttpError(400, `El campo ${field} debe ser texto`);
-    }
-  }
-
-  if (imageUrl !== undefined && typeof imageUrl !== 'string') {
-    throw new HttpError(400, 'La imagen debe enviarse como una URL de texto');
-  }
-  if (images !== undefined) {
-    if (!Array.isArray(images) || images.length < 1 || images.length > 5) {
-      throw new HttpError(400, 'Debes subir entre 1 y 5 imágenes');
-    }
-
-    let totalBytes = 0;
-    for (const image of images) {
-      const match = typeof image === 'string'
-        ? image.match(/^data:image\/(jpeg|png);base64,([A-Za-z0-9+/]+={0,2})$/)
-        : null;
-      if (!match) {
-        throw new HttpError(400, 'Cada imagen debe ser JPG o PNG válida');
-      }
-
-      const bytes = Buffer.from(match[2], 'base64');
-      if (bytes.length > 5 * 1024 * 1024) {
-        throw new HttpError(400, 'Cada imagen debe pesar máximo 5 MB');
-      }
-      totalBytes += bytes.length;
-      if (totalBytes > 20 * 1024 * 1024) {
-        throw new HttpError(400, 'El tamaño total de las imágenes no debe superar 20 MB');
-      }
-    }
-  }
-  if (typeof autorizaDonacion !== 'boolean') {
-    throw new HttpError(400, 'autorizaDonacion debe ser verdadero o falso');
-  }
-  if (!Array.isArray(tags) || tags.some((tag) => typeof tag !== 'string')) {
-    throw new HttpError(400, 'tags debe ser una lista de textos');
-  }
+  const talla = body.talla || '';
+  const genero = body.genero || '';
+  const clima = body.clima || '';
+  const autorizaDonacion = body.autorizaDonacion !== undefined ? Boolean(body.autorizaDonacion) : true;
+  const tags = Array.isArray(body.tags) ? body.tags : [];
+  const status = body.status || body.estadoPublicacion || 'Disponible';
 
   // Validación de título
   if (!title || typeof title !== 'string' || title.trim().length < 3) {
     throw new HttpError(400, 'El título es obligatorio y debe tener al menos 3 caracteres');
+  }
+  if (images !== undefined && !Array.isArray(images)) {
+    throw new HttpError(400, 'Las imágenes deben enviarse como una lista');
   }
 
   // Normalización hacia el esquema de Mongoose
@@ -73,13 +37,16 @@ function validarCreacionPublicacion(req, res, next) {
     condition: condition.trim(),
     description: description.trim(),
     details: details.trim(),
+    author: author.trim(),
+    usuarioId,
     imageUrl: imageUrl && typeof imageUrl === 'string' && imageUrl.trim().length > 0 ? imageUrl.trim() : undefined,
-    ...(images !== undefined ? { images } : {}),
+    images,
     talla: talla.trim(),
     genero: genero.trim(),
     clima: clima.trim(),
     autorizaDonacion,
-    tags: tags.map((tag) => tag.trim()),
+    tags,
+    status,
     // Compatibilidad
     codigo: body.codigo || '',
     categoriaPrenda: body.categoriaPrenda || category,
@@ -99,15 +66,9 @@ function validarCambioPublicacion(req, res, next) {
   }
 
   const cambios = {};
-  const texto = (value, campo) => {
-    if (typeof value !== 'string') {
-      throw new HttpError(400, `El campo ${campo} debe ser texto`);
-    }
-    return value.trim();
-  };
 
   if (body.title !== undefined || body.titulo !== undefined) {
-    const title = body.title ?? body.titulo;
+    const title = (body.title || body.titulo);
     if (typeof title !== 'string' || title.trim().length < 3) {
       throw new HttpError(400, 'El título debe tener al menos 3 caracteres');
     }
@@ -115,28 +76,28 @@ function validarCambioPublicacion(req, res, next) {
   }
 
   if (body.category !== undefined || body.categoria !== undefined) {
-    cambios.category = texto(body.category ?? body.categoria, 'category').toUpperCase();
+    cambios.category = String(body.category || body.categoria).trim().toUpperCase();
   }
 
   if (body.modality !== undefined || body.modalidad !== undefined) {
-    const mod = texto(body.modality ?? body.modalidad, 'modality');
+    const mod = String(body.modality || body.modalidad);
     cambios.modality = mod.toLowerCase().includes('inter') ? 'Intercambio' : 'Donación';
   }
 
   if (body.condition !== undefined || body.estado !== undefined || body.estadoFisico !== undefined) {
-    cambios.condition = texto(body.condition ?? body.estado ?? body.estadoFisico, 'condition');
+    cambios.condition = String(body.condition || body.estado || body.estadoFisico).trim();
   }
 
   if (body.description !== undefined || body.descripcion !== undefined) {
-    cambios.description = texto(body.description ?? body.descripcion, 'description');
+    cambios.description = String(body.description || body.descripcion).trim();
   }
 
   if (body.details !== undefined || body.detalles !== undefined) {
-    cambios.details = texto(body.details ?? body.detalles, 'details');
+    cambios.details = String(body.details || body.detalles).trim();
   }
 
   if (body.status !== undefined || body.estadoPublicacion !== undefined) {
-    const st = texto(body.status ?? body.estadoPublicacion, 'status');
+    const st = String(body.status || body.estadoPublicacion);
     const estadosPermitidos = ['Disponible', 'Reservado', 'Donado', 'Caducado'];
     if (!estadosPermitidos.includes(st)) {
       throw new HttpError(400, `El estado debe ser uno de: ${estadosPermitidos.join(', ')}`);
@@ -145,27 +106,25 @@ function validarCambioPublicacion(req, res, next) {
   }
 
   if (body.imageUrl !== undefined || body.imagenUrl !== undefined) {
-    cambios.imageUrl = texto(body.imageUrl ?? body.imagenUrl, 'imageUrl');
+    cambios.imageUrl = String(body.imageUrl || body.imagenUrl).trim();
+  }
+
+  if (body.requests !== undefined) {
+    cambios.requests = Number(body.requests);
+  }
+
+  if (body.daysElapsed !== undefined) {
+    cambios.daysElapsed = Number(body.daysElapsed);
   }
 
   if (body.tags !== undefined && Array.isArray(body.tags)) {
-    if (body.tags.some((tag) => typeof tag !== 'string')) {
-      throw new HttpError(400, 'tags debe ser una lista de textos');
-    }
-    cambios.tags = body.tags.map((tag) => tag.trim());
-  } else if (body.tags !== undefined) {
-    throw new HttpError(400, 'tags debe ser una lista de textos');
+    cambios.tags = body.tags;
   }
 
-  if (body.talla !== undefined) cambios.talla = texto(body.talla, 'talla');
-  if (body.genero !== undefined) cambios.genero = texto(body.genero, 'genero');
-  if (body.clima !== undefined) cambios.clima = texto(body.clima, 'clima');
-  if (body.autorizaDonacion !== undefined) {
-    if (typeof body.autorizaDonacion !== 'boolean') {
-      throw new HttpError(400, 'autorizaDonacion debe ser verdadero o falso');
-    }
-    cambios.autorizaDonacion = body.autorizaDonacion;
-  }
+  if (body.talla !== undefined) cambios.talla = String(body.talla).trim();
+  if (body.genero !== undefined) cambios.genero = String(body.genero).trim();
+  if (body.clima !== undefined) cambios.clima = String(body.clima).trim();
+  if (body.autorizaDonacion !== undefined) cambios.autorizaDonacion = Boolean(body.autorizaDonacion);
 
   if (Object.keys(cambios).length === 0) {
     throw new HttpError(400, 'No se enviaron campos válidos para actualizar');

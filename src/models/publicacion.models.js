@@ -49,7 +49,7 @@ const publicacionSchema = new mongoose.Schema(
     },
     imageUrl: {
       type: String,
-      default: '',
+      default: 'https://images.unsplash.com/photo-1541963463532-d68292c34b19?w=500&q=80',
     },
     imageUrls: {
       type: [String],
@@ -64,7 +64,6 @@ const publicacionSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Usuario',
       default: null,
-      index: true,
     },
     publishedAt: {
       type: String,
