@@ -34,7 +34,11 @@ const usuarioSchema = new mongoose.Schema(
     },
     rating: {
       type: Number,
-      default: 5,
+      default: 0,
+    },
+    ratingCount: {
+      type: Number,
+      default: 0,
     },
     avatarUrl: {
       type: String,

@@ -3,7 +3,6 @@ const app = require('./app');
 const { connectDB } = require('./config/db');
 const { sembrarDatosIniciales } = require('./services/publicaciones.service');
 const { sembrarUsuarioInicial } = require('./services/auth.service');
-const { sembrarSolicitudesIniciales } = require('./services/solicitudes.service');
 
 const PORT = process.env.PORT || 3000;
 
@@ -15,7 +14,6 @@ async function iniciarServidor() {
     // 2. Semillas iniciales automáticas (si las colecciones están vacías)
     await sembrarDatosIniciales();
     await sembrarUsuarioInicial();
-    await sembrarSolicitudesIniciales();
 
     // 3. Inicio del servidor HTTP
     app.listen(PORT, () => {

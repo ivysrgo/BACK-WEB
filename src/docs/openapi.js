@@ -19,6 +19,13 @@ module.exports = {
     { name: 'Salud', description: 'Comprobación de estado del servicio' },
   ],
   components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+      },
+    },
     schemas: {
       Publicacion: {
         type: 'object',
@@ -78,19 +85,21 @@ module.exports = {
           author: { type: 'string', example: 'Camila Rojas' },
           message: { type: 'string', example: 'Ofrezco un impermeable para intercambio.' },
           date: { type: 'string', example: 'Hace 2 días' },
-          status: { type: 'string', enum: ['Pendiente', 'Aceptado', 'Donado', 'Rechazado'], example: 'Pendiente' },
-          esFavorito: { type: 'boolean', example: true },
-          daysRemaining: { type: 'integer', example: 4 },
+          status: { type: 'string', enum: ['Pendiente', 'Aceptado', 'Donado', 'Rechazado', 'Cancelado'], example: 'Pendiente' },
+          articuloId: { type: 'string', example: '672f6a15f9a0c1a2e3b4c5d6' },
+          solicitanteId: { type: 'string' },
+          destinatarioId: { type: 'string' },
         },
       },
       NuevaSolicitud: {
         type: 'object',
-        required: ['title', 'message'],
+        required: ['title', 'message', 'articuloId'],
         properties: {
           title: { type: 'string', example: 'Chaqueta de Jean Oversize' },
           message: { type: 'string', example: 'Tengo una prenda para intercambiar.' },
-          type: { type: 'string', example: 'INTERCAMBIO' },
-          author: { type: 'string', example: 'Usuario de la comunidad' },
+          type: { type: 'string', enum: ['DONACIÓN', 'INTERCAMBIO'], example: 'INTERCAMBIO' },
+          articuloId: { type: 'string' },
+          articuloOfrecidoId: { type: 'string' },
         },
       },
       UsuarioRegistro: {
@@ -195,6 +204,27 @@ module.exports = {
               },
             },
           },
+        },
+      },
+    },
+    '/publicaciones/mis-publicaciones': {
+      get: {
+        tags: ['Publicaciones / Artículos'],
+        summary: 'Listar las publicaciones del usuario autenticado',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Publicaciones del usuario',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'array',
+                  items: { $ref: '#/components/schemas/Publicacion' },
+                },
+              },
+            },
+          },
+          401: { description: 'Se requiere autenticación' },
         },
       },
     },
@@ -389,23 +419,35 @@ module.exports = {
         },
       },
     },
-    '/solicitudes': {
+    '/solicitudes/mias': {
       get: {
         tags: ['Solicitudes'],
-        summary: 'Listar solicitudes',
+        summary: 'Listar solicitudes, favoritos y estados del usuario autenticado',
+        security: [{ bearerAuth: [] }],
         responses: {
           200: {
             content: {
               'application/json': {
-                schema: { type: 'array', items: { $ref: '#/components/schemas/Solicitud' } },
+                schema: {
+                  type: 'object',
+                  properties: {
+                    enviadas: { type: 'array', items: { $ref: '#/components/schemas/Solicitud' } },
+                    recibidas: { type: 'array', items: { $ref: '#/components/schemas/Solicitud' } },
+                    historial: { type: 'array', items: { $ref: '#/components/schemas/Solicitud' } },
+                    favoritos: { type: 'integer' },
+                  },
+                },
               },
             },
           },
         },
       },
+    },
+    '/solicitudes': {
       post: {
         tags: ['Solicitudes'],
         summary: 'Crear solicitud',
+        security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
@@ -421,6 +463,7 @@ module.exports = {
       get: {
         tags: ['Solicitudes'],
         summary: 'Obtener solicitud por ID',
+        security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         responses: {
           200: { description: 'Detalle de la solicitud' },
@@ -429,7 +472,8 @@ module.exports = {
       },
       patch: {
         tags: ['Solicitudes'],
-        summary: 'Actualizar solicitud (estado, favorito)',
+        summary: 'Actualizar el estado de una solicitud propia o recibida',
+        security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         requestBody: {
           content: {
@@ -437,8 +481,7 @@ module.exports = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', enum: ['Pendiente', 'Aceptado', 'Donado', 'Rechazado'] },
-                  esFavorito: { type: 'boolean' },
+                  status: { type: 'string', enum: ['Aceptado', 'Donado', 'Rechazado', 'Cancelado'] },
                 },
               },
             },
@@ -448,12 +491,68 @@ module.exports = {
           200: { description: 'Solicitud actualizada' },
         },
       },
+    },
+    '/solicitudes/{id}/confirmar-intercambio': {
+      post: {
+        tags: ['Solicitudes'],
+        summary: 'Confirmar un intercambio y calificar al solicitante',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['calificacion'],
+                properties: { calificacion: { type: 'integer', minimum: 1, maximum: 5 } },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Intercambio confirmado y calificación guardada' },
+        },
+      },
+    },
+    '/favoritos': {
+      get: {
+        tags: ['Solicitudes'],
+        summary: 'Listar publicaciones favoritas del usuario',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Lista de publicaciones favoritas con días restantes de vigencia' },
+        },
+      },
+      post: {
+        tags: ['Solicitudes'],
+        summary: 'Agregar una publicación a favoritos',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['articuloId'],
+                properties: { articuloId: { type: 'string' } },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Publicación agregada a favoritos' },
+        },
+      },
+    },
+    '/favoritos/{articuloId}': {
       delete: {
         tags: ['Solicitudes'],
-        summary: 'Eliminar solicitud',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        summary: 'Quitar una publicación de favoritos',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'articuloId', in: 'path', required: true, schema: { type: 'string' } }],
         responses: {
-          204: { description: 'Eliminada con éxito' },
+          204: { description: 'Publicación quitada de favoritos' },
         },
       },
     },

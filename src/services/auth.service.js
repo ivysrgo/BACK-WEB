@@ -5,6 +5,10 @@ const HttpError = require('../utils/HttpError');
 const JWT_SECRET = process.env.JWT_SECRET || 'eco_golgi_jwt_super_secret_key_2026_secureroles';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
+function calificacionDel(usuario) {
+  return usuario.ratingCount > 0 ? usuario.rating : 0;
+}
+
 /**
  * Autentica un usuario verificando credenciales, estado de bloqueo y emite un token JWT real.
  */
@@ -65,7 +69,7 @@ async function login({ correo, contrasena }) {
       correo: usuario.correo,
       role: rolNormalizado,
       phone: usuario.phone,
-      rating: usuario.rating,
+      rating: calificacionDel(usuario),
       avatarUrl: usuario.avatarUrl,
     },
   };
@@ -88,7 +92,8 @@ async function registrar({ nombre, correo, contrasena, phone }) {
     contrasena, // el pre-save hook de Mongoose se encargará de hashearlo con bcrypt
     phone: phone ? String(phone).trim() : '',
     role: 'user',
-    rating: 5,
+    rating: 0,
+    ratingCount: 0,
   });
 
   await nuevoUsuario.save();
@@ -113,7 +118,7 @@ async function registrar({ nombre, correo, contrasena, phone }) {
       correo: nuevoUsuario.correo,
       role: 'user',
       phone: nuevoUsuario.phone,
-      rating: nuevoUsuario.rating,
+      rating: calificacionDel(nuevoUsuario),
     },
   };
 }
@@ -138,7 +143,7 @@ async function obtenerPerfil(usuarioId) {
     correo: usuario.correo,
     role: rolNormalizado,
     phone: usuario.phone,
-    rating: usuario.rating,
+    rating: calificacionDel(usuario),
     avatarUrl: usuario.avatarUrl,
   };
 }
@@ -223,7 +228,8 @@ async function sembrarUsuariosIniciales() {
         contrasena: 'Admin123*',
         role: 'admin',
         phone: '+57 300 000 0000',
-        rating: 5,
+        rating: 0,
+        ratingCount: 0,
         avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
       });
       console.log('✔ Administrador creado: admin@ecogolgi.com / Admin123* (Rol: admin)');
@@ -245,7 +251,8 @@ async function sembrarUsuariosIniciales() {
         contrasena: '123456',
         role: 'user',
         phone: '+57 300 123 4567',
-        rating: 5,
+        rating: 0,
+        ratingCount: 0,
         avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
       });
       console.log('✔ Usuario normal creado: juanelpro2005@gmail.com / 123456 (Rol: user)');

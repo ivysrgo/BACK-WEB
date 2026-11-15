@@ -1,8 +1,8 @@
 const servicio = require('../services/solicitudes.service');
 
-async function listar(req, res, next) {
+async function listarMias(req, res, next) {
   try {
-    const solicitudes = await servicio.listar(req.query);
+    const solicitudes = await servicio.listarDeUsuario(req.usuario.id);
     res.status(200).json(solicitudes);
   } catch (error) {
     next(error);
@@ -11,7 +11,7 @@ async function listar(req, res, next) {
 
 async function obtener(req, res, next) {
   try {
-    const solicitud = await servicio.obtener(req.params.id);
+    const solicitud = await servicio.obtener(req.params.id, req.usuario.id);
     res.status(200).json(solicitud);
   } catch (error) {
     next(error);
@@ -20,35 +20,43 @@ async function obtener(req, res, next) {
 
 async function crear(req, res, next) {
   try {
-    const nueva = await servicio.crear(req.body);
+    const nueva = await servicio.crear(req.body, req.usuario);
     res.status(201).json(nueva);
   } catch (error) {
     next(error);
   }
 }
 
-async function actualizar(req, res, next) {
+async function actualizarEstado(req, res, next) {
   try {
-    const actualizada = await servicio.actualizar(req.params.id, req.body);
+    const actualizada = await servicio.actualizarEstado(
+      req.params.id,
+      req.body.status,
+      req.usuario.id
+    );
     res.status(200).json(actualizada);
   } catch (error) {
     next(error);
   }
 }
 
-async function eliminar(req, res, next) {
+async function confirmarIntercambio(req, res, next) {
   try {
-    await servicio.eliminar(req.params.id);
-    res.status(204).send();
+    const actualizada = await servicio.confirmarIntercambio(
+      req.params.id,
+      req.body.calificacion,
+      req.usuario.id
+    );
+    res.status(200).json(actualizada);
   } catch (error) {
     next(error);
   }
 }
 
 module.exports = {
-  listar,
+  listarMias,
   obtener,
   crear,
-  actualizar,
-  eliminar,
+  actualizarEstado,
+  confirmarIntercambio,
 };

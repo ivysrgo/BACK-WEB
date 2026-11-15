@@ -194,6 +194,8 @@ function validarCreacionSolicitud(req, res, next) {
   const message = body.message || body.mensaje;
   const type = body.type || body.tipo || 'DONACIÓN';
   const author = body.author || body.autor || 'Usuario de la comunidad';
+  const articuloId = body.articuloId || body.articleId;
+  const articuloOfrecidoId = body.articuloOfrecidoId || null;
 
   if (!title || typeof title !== 'string' || title.trim().length < 3) {
     throw new HttpError(400, 'El título es obligatorio y debe tener al menos 3 caracteres');
@@ -202,15 +204,20 @@ function validarCreacionSolicitud(req, res, next) {
   if (!message || typeof message !== 'string' || message.trim().length < 3) {
     throw new HttpError(400, 'El mensaje es obligatorio y debe tener al menos 3 caracteres');
   }
+  if (!articuloId || typeof articuloId !== 'string') {
+    throw new HttpError(400, 'Debes indicar el artículo que solicitas');
+  }
+  if (String(type).toUpperCase().includes('INTER') && !articuloOfrecidoId) {
+    throw new HttpError(400, 'Debes seleccionar un artículo para ofrecer en el intercambio');
+  }
 
   req.body = {
     title: title.trim(),
     message: message.trim(),
     type: String(type).toUpperCase().includes('INTER') ? 'INTERCAMBIO' : 'DONACIÓN',
     author: author.trim(),
-    articuloId: body.articuloId || null,
-    articuloOfrecidoId: body.articuloOfrecidoId || null,
-    esFavorito: Boolean(body.esFavorito || body.isFavorite),
+    articuloId,
+    articuloOfrecidoId,
   };
 
   next();
@@ -218,31 +225,13 @@ function validarCreacionSolicitud(req, res, next) {
 
 function validarCambioSolicitud(req, res, next) {
   const body = req.body ?? {};
-  if (!body || Object.keys(body).length === 0) {
-    throw new HttpError(400, 'No se enviaron datos para actualizar');
+  const status = body.status || body.estado;
+  const permitidos = ['Aceptado', 'Donado', 'Rechazado', 'Cancelado'];
+  if (!permitidos.includes(status)) {
+    throw new HttpError(400, `El estado debe ser uno de: ${permitidos.join(', ')}`);
   }
 
-  const cambios = {};
-  if (body.status !== undefined || body.estado !== undefined) {
-    const st = body.status || body.estado;
-    const permitidos = ['Pendiente', 'Aceptado', 'Donado', 'Rechazado'];
-    if (!permitidos.includes(st)) {
-      throw new HttpError(400, `El estado debe ser uno de: ${permitidos.join(', ')}`);
-    }
-    cambios.status = st;
-  }
-
-  if (body.esFavorito !== undefined || body.isFavorite !== undefined) {
-    cambios.esFavorito = Boolean(body.esFavorito !== undefined ? body.esFavorito : body.isFavorite);
-  }
-
-  if (body.message !== undefined) cambios.message = String(body.message).trim();
-
-  if (Object.keys(cambios).length === 0) {
-    throw new HttpError(400, 'No se enviaron campos válidos para actualizar');
-  }
-
-  req.body = cambios;
+  req.body = { status };
   next();
 }
 

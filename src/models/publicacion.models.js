@@ -47,6 +47,11 @@ const publicacionSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    expirationDays: {
+      type: Number,
+      default: 30,
+      min: 1,
+    },
     imageUrl: {
       type: String,
       default: 'https://images.unsplash.com/photo-1541963463532-d68292c34b19?w=500&q=80',

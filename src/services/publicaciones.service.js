@@ -1,4 +1,5 @@
 const Publicacion = require('../models/publicacion.models');
+const Favorito = require('../models/favorito.models');
 const HttpError = require('../utils/HttpError');
 const { guardarImagenesPublicacion, eliminarImagenesPublicacion } = require('../utils/imagenesPublicacion');
 
@@ -35,6 +36,10 @@ async function listar(filtros = {}) {
   }
 
   return await Publicacion.find(query).sort({ createdAt: -1 });
+}
+
+async function listarDeUsuario(usuarioId) {
+  return await Publicacion.find({ usuarioId }).sort({ createdAt: -1 });
 }
 
 async function obtener(id) {
@@ -82,6 +87,7 @@ async function eliminar(id) {
   if (!eliminada) {
     throw new HttpError(404, 'Publicación no encontrada');
   }
+  await Favorito.deleteMany({ articuloId: id });
   return eliminada;
 }
 
@@ -200,6 +206,7 @@ async function sembrarDatosIniciales() {
 
 module.exports = {
   listar,
+  listarDeUsuario,
   obtener,
   crear,
   actualizar,
