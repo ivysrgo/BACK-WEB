@@ -52,6 +52,11 @@ const usuarioSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Fin del bloqueo temporal por intentos fallidos
+    bloqueadoHasta: {
+      type: Date,
+      default: null,
+    },
     // Suspensión manual hecha por un administrador (distinto de `bloqueado`,
     // que es el bloqueo automático por intentos fallidos de inicio de sesión).
     suspendido: {
@@ -116,6 +121,12 @@ usuarioSchema.methods.compararContrasena = async function (candidata) {
   }
 
   return false;
+};
+
+// El bloqueo por intentos fallidos es temporal: vence en `bloqueadoHasta`.
+// Los bloqueos antiguos sin fecha se consideran vencidos.
+usuarioSchema.methods.estaBloqueado = function () {
+  return Boolean(this.bloqueado && this.bloqueadoHasta && this.bloqueadoHasta > new Date());
 };
 
 // Método de conveniencia para verificar si es administrador

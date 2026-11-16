@@ -33,7 +33,7 @@ async function verificarToken(req, res, next) {
       throw new HttpError(401, 'El usuario asociado a este token ya no existe');
     }
 
-    if (usuario.bloqueado) {
+    if (usuario.estaBloqueado()) {
       throw new HttpError(403, 'Tu cuenta está temporalmente bloqueada. Restablece tu contraseña.');
     }
 
@@ -71,7 +71,7 @@ async function verificarTokenOpcional(req, res, next) {
     }
 
     const usuario = await Usuario.findById(decoded.id);
-    req.usuario = usuario && !usuario.bloqueado && !usuario.suspendido ? usuario : null;
+    req.usuario = usuario && !usuario.estaBloqueado() && !usuario.suspendido ? usuario : null;
     next();
   } catch {
     req.usuario = null;

@@ -4,6 +4,9 @@ const HttpError = require('../utils/HttpError');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'eco_golgi_jwt_super_secret_key_2026_secureroles';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+const MAX_INTENTOS = 3;
+const MINUTOS_BLOQUEO = 15;
+const MENSAJE_BLOQUEO = `Demasiados intentos fallidos. Tu cuenta está bloqueada por ${MINUTOS_BLOQUEO} minutos; intenta más tarde o restablece tu contraseña.`;
 
 function calificacionDel(usuario) {
   return usuario.ratingCount > 0 ? usuario.rating : 0;
@@ -24,8 +27,14 @@ async function login({ correo, contrasena }) {
   }
 
   // Verificar si la cuenta se encuentra bloqueada por intentos fallidos
+  if (usuario.estaBloqueado()) {
+    throw new HttpError(403, MENSAJE_BLOQUEO);
+  }
   if (usuario.bloqueado) {
-    throw new HttpError(403, 'Demasiados intentos, intenta más tarde');
+    // El bloqueo ya venció: se reinicia el contador
+    usuario.bloqueado = false;
+    usuario.bloqueadoHasta = null;
+    usuario.intentosFallidos = 0;
   }
 
   // Verificar coincidencia de contraseña utilizando bcrypt (con soporte retrocompatible)
@@ -33,10 +42,11 @@ async function login({ correo, contrasena }) {
 
   if (!esValida) {
     usuario.intentosFallidos = (usuario.intentosFallidos || 0) + 1;
-    if (usuario.intentosFallidos >= 3) {
+    if (usuario.intentosFallidos >= MAX_INTENTOS) {
       usuario.bloqueado = true;
+      usuario.bloqueadoHasta = new Date(Date.now() + MINUTOS_BLOQUEO * 60_000);
       await usuario.save();
-      throw new HttpError(403, 'Demasiados intentos, intenta más tarde');
+      throw new HttpError(403, MENSAJE_BLOQUEO);
     }
     await usuario.save();
     throw new HttpError(401, 'Credenciales incorrectas');
@@ -45,6 +55,7 @@ async function login({ correo, contrasena }) {
   // Reiniciar intentos al autenticar correctamente
   usuario.intentosFallidos = 0;
   usuario.bloqueado = false;
+  usuario.bloqueadoHasta = null;
   await usuario.save();
 
   // Rol normalizado para frontend
@@ -207,6 +218,7 @@ async function restablecerContrasena(correo, pin, nuevaContrasena) {
   usuario.contrasena = nuevaContrasena;
   usuario.pinRecuperacion = null;
   usuario.bloqueado = false;
+  usuario.bloqueadoHasta = null;
   usuario.intentosFallidos = 0;
   await usuario.save();
 
@@ -240,7 +252,7 @@ async function cambiarContrasena(usuarioId, contrasenaActual, nuevaContrasena) {
 
 /**
  * Semillero inicial de usuarios en MongoDB Atlas:
- * 1. Crea el Administrador: admin@ecogolgi.com / Admin123* (role: 'admin')
+ * 1. Crea el Administrador: admin@ecogolgi.com / Admin123 (role: 'admin')
  * 2. Crea el Usuario normal: juanelpro2005@gmail.com / 123456 (role: 'user')
  */
 async function sembrarUsuariosIniciales() {
@@ -252,14 +264,14 @@ async function sembrarUsuariosIniciales() {
       await Usuario.create({
         nombre: 'Administrador Eco-Golgi',
         correo: 'admin@ecogolgi.com',
-        contrasena: 'Admin123*',
+        contrasena: 'Admin123',
         role: 'admin',
         phone: '+57 300 000 0000',
         rating: 0,
         ratingCount: 0,
         avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
       });
-      console.log('✔ Administrador creado: admin@ecogolgi.com / Admin123* (Rol: admin)');
+      console.log('✔ Administrador creado: admin@ecogolgi.com / Admin123 (Rol: admin)');
     } else {
       // Si existía con rol descriptivo, aseguramos rol admin
       if (adminExiste.role !== 'admin') {

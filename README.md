@@ -140,7 +140,7 @@ El sistema incluye dos tipos de usuarios sembrados con contraseñas encriptadas 
 
 ### 1. 🛡️ Administrador (Acceso al panel administrativo y métricas)
 * **Correo:** `admin@ecogolgi.com`
-* **Contraseña:** `Admin123*`
+* **Contraseña:** `Admin123`
 * **Nombre:** `Administrador Eco-Golgi`
 * **Rol:** `admin` (Redirección a `/admin/explorar`)
 
