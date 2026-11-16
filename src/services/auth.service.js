@@ -212,6 +212,29 @@ async function restablecerContrasena(correo, pin, nuevaContrasena) {
 }
 
 /**
+ * Cambia la contraseña de un usuario autenticado verificando primero la actual.
+ */
+async function cambiarContrasena(usuarioId, contrasenaActual, nuevaContrasena) {
+  const usuario = await Usuario.findById(usuarioId);
+  if (!usuario) {
+    throw new HttpError(404, 'Usuario no encontrado');
+  }
+
+  const esValida = await usuario.compararContrasena(contrasenaActual);
+  if (!esValida) {
+    throw new HttpError(400, 'La contraseña actual no es correcta');
+  }
+
+  // El hook pre-save la hashea con bcrypt
+  usuario.contrasena = nuevaContrasena;
+  await usuario.save();
+
+  return {
+    mensaje: 'Contraseña actualizada correctamente',
+  };
+}
+
+/**
  * Semillero inicial de usuarios en MongoDB Atlas:
  * 1. Crea el Administrador: admin@ecogolgi.com / Admin123* (role: 'admin')
  * 2. Crea el Usuario normal: juanelpro2005@gmail.com / 123456 (role: 'user')
@@ -274,6 +297,7 @@ module.exports = {
   solicitarRecuperacion,
   verificarCodigo,
   restablecerContrasena,
+  cambiarContrasena,
   sembrarUsuarioInicial: sembrarUsuariosIniciales,
   sembrarUsuariosIniciales,
 };

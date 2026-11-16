@@ -419,6 +419,44 @@ module.exports = {
         },
       },
     },
+    '/auth/cambiar-contrasena': {
+      patch: {
+        tags: ['Autenticación'],
+        summary: 'Cambiar la contraseña del usuario autenticado',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['contrasenaActual', 'nuevaContrasena'],
+                properties: {
+                  contrasenaActual: { type: 'string' },
+                  nuevaContrasena: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Contraseña actualizada correctamente' },
+          400: { description: 'Contraseña actual incorrecta o nueva contraseña insegura' },
+          401: { description: 'No autenticado' },
+        },
+      },
+    },
+    '/notificaciones': {
+      get: {
+        tags: ['Solicitudes'],
+        summary: 'Notificaciones del usuario autenticado (solicitudes recibidas, caducidad y respuestas)',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Lista de notificaciones del usuario' },
+          401: { description: 'No autenticado' },
+        },
+      },
+    },
     '/solicitudes/mias': {
       get: {
         tags: ['Solicitudes'],

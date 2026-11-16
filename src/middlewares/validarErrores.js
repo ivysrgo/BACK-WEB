@@ -134,6 +134,17 @@ function validarCambioPublicacion(req, res, next) {
   next();
 }
 
+// Reglas de contraseña segura compartidas por el registro y el cambio de contraseña
+function mensajeContrasenaInsegura(contrasena) {
+  if (!contrasena || typeof contrasena !== 'string') return 'La contraseña es obligatoria';
+  if (contrasena.length < 5) return 'La contraseña debe tener como mínimo 5 caracteres';
+  if (!/[A-Z]/.test(contrasena)) return 'La contraseña debe contener al menos una letra mayúscula';
+  if (!/[a-z]/.test(contrasena)) return 'La contraseña debe contener al menos una letra minúscula';
+  if (!/[0-9]/.test(contrasena)) return 'La contraseña debe contener al menos un número';
+  if (!/[^A-Za-z0-9]/.test(contrasena)) return 'La contraseña debe contener al menos un carácter especial';
+  return null;
+}
+
 function validarRegistro(req, res, next) {
   const { nombre, correo, contrasena, phone } = req.body ?? {};
 
@@ -145,28 +156,9 @@ function validarRegistro(req, res, next) {
     throw new HttpError(400, 'El correo electrónico no es válido');
   }
 
-  if (!contrasena || typeof contrasena !== 'string') {
-    throw new HttpError(400, 'La contraseña es obligatoria');
-  }
-
-  if (contrasena.length < 5) {
-    throw new HttpError(400, 'La contraseña debe tener como mínimo 5 caracteres');
-  }
-
-  if (!/[A-Z]/.test(contrasena)) {
-    throw new HttpError(400, 'La contraseña debe contener al menos una letra mayúscula');
-  }
-
-  if (!/[a-z]/.test(contrasena)) {
-    throw new HttpError(400, 'La contraseña debe contener al menos una letra minúscula');
-  }
-
-  if (!/[0-9]/.test(contrasena)) {
-    throw new HttpError(400, 'La contraseña debe contener al menos un número');
-  }
-
-  if (!/[^A-Za-z0-9]/.test(contrasena)) {
-    throw new HttpError(400, 'La contraseña debe contener al menos un carácter especial');
+  const errorContrasena = mensajeContrasenaInsegura(contrasena);
+  if (errorContrasena) {
+    throw new HttpError(400, errorContrasena);
   }
 
   req.body.nombre = nombre.trim();
@@ -185,6 +177,25 @@ function validarLogin(req, res, next) {
   }
 
   req.body.correo = String(correo).trim().toLowerCase();
+  next();
+}
+
+function validarCambioContrasena(req, res, next) {
+  const { contrasenaActual, nuevaContrasena } = req.body ?? {};
+
+  if (!contrasenaActual || typeof contrasenaActual !== 'string') {
+    throw new HttpError(400, 'Debes ingresar tu contraseña actual');
+  }
+
+  const errorContrasena = mensajeContrasenaInsegura(nuevaContrasena);
+  if (errorContrasena) {
+    throw new HttpError(400, errorContrasena);
+  }
+
+  if (contrasenaActual === nuevaContrasena) {
+    throw new HttpError(400, 'La nueva contraseña debe ser diferente a la actual');
+  }
+
   next();
 }
 
@@ -240,6 +251,7 @@ module.exports = {
   validarCambioPublicacion,
   validarRegistro,
   validarLogin,
+  validarCambioContrasena,
   validarCreacionSolicitud,
   validarCambioSolicitud,
 };

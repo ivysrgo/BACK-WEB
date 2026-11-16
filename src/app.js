@@ -7,6 +7,7 @@ const publicacionesRouter = require('./routes/publicaciones.routes');
 const authRouter = require('./routes/auth.routes');
 const solicitudesRouter = require('./routes/solicitudes.routes');
 const favoritosRouter = require('./routes/favoritos.routes');
+const notificacionesRouter = require('./routes/notificaciones.routes');
 const { rutaNoEncontrada, manejarErrores } = require('./middlewares/manejarErrores');
 
 const app = express();
@@ -27,6 +28,7 @@ app.use('/api/articulos', publicacionesRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/solicitudes', solicitudesRouter);
 app.use('/api/favoritos', favoritosRouter);
+app.use('/api/notificaciones', notificacionesRouter);
 
 // 4. Manejo de rutas no encontradas y errores centralizados
 app.use(rutaNoEncontrada);
