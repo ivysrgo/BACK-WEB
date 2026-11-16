@@ -37,6 +37,10 @@ async function verificarToken(req, res, next) {
       throw new HttpError(403, 'Tu cuenta está temporalmente bloqueada. Restablece tu contraseña.');
     }
 
+    if (usuario.suspendido) {
+      throw new HttpError(403, 'Tu cuenta fue suspendida por un administrador');
+    }
+
     // Inyectamos el usuario autenticado en la petición
     req.usuario = usuario;
     next();
@@ -67,7 +71,7 @@ async function verificarTokenOpcional(req, res, next) {
     }
 
     const usuario = await Usuario.findById(decoded.id);
-    req.usuario = usuario && !usuario.bloqueado ? usuario : null;
+    req.usuario = usuario && !usuario.bloqueado && !usuario.suspendido ? usuario : null;
     next();
   } catch {
     req.usuario = null;

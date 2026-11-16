@@ -52,6 +52,16 @@ const usuarioSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Suspensión manual hecha por un administrador (distinto de `bloqueado`,
+    // que es el bloqueo automático por intentos fallidos de inicio de sesión).
+    suspendido: {
+      type: Boolean,
+      default: false,
+    },
+    suspendidoEn: {
+      type: Date,
+      default: null,
+    },
     pinRecuperacion: {
       type: String,
       default: null,

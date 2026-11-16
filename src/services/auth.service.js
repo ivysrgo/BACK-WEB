@@ -19,6 +19,10 @@ async function login({ correo, contrasena }) {
     throw new HttpError(401, 'Credenciales incorrectas');
   }
 
+  if (usuario.suspendido) {
+    throw new HttpError(403, 'Tu cuenta fue suspendida por un administrador');
+  }
+
   // Verificar si la cuenta se encuentra bloqueada por intentos fallidos
   if (usuario.bloqueado) {
     throw new HttpError(403, 'Demasiados intentos, intenta más tarde');

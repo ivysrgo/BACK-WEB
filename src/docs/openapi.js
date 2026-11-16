@@ -446,6 +446,107 @@ module.exports = {
         },
       },
     },
+    '/reportes': {
+      post: {
+        tags: ['Administración'],
+        summary: 'Reportar una publicación (usuario autenticado)',
+        security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['publicacionId', 'motivo'], properties: { publicacionId: { type: 'string' }, motivo: { type: 'string' }, descripcion: { type: 'string' } } } } } },
+        responses: { 201: { description: 'Reporte creado' }, 400: { description: 'Datos inválidos' }, 404: { description: 'Publicación no encontrada' } },
+      },
+      get: {
+        tags: ['Administración'],
+        summary: 'Listar reportes pendientes o el historial (solo admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'tipo', in: 'query', schema: { type: 'string', enum: ['pendientes', 'historial'] } }],
+        responses: { 200: { description: 'Lista de reportes' }, 403: { description: 'Requiere administrador' } },
+      },
+    },
+    '/reportes/{id}': {
+      get: {
+        tags: ['Administración'],
+        summary: 'Detalle de un reporte con datos del reportante y del usuario reportado (solo admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Reporte' }, 404: { description: 'No encontrado' } },
+      },
+    },
+    '/reportes/{id}/ignorar': {
+      patch: {
+        tags: ['Administración'],
+        summary: 'Ignorar un reporte pendiente (solo admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Reporte ignorado' }, 409: { description: 'Ya resuelto' } },
+      },
+    },
+    '/reportes/{id}/eliminar-publicacion': {
+      patch: {
+        tags: ['Administración'],
+        summary: 'Eliminar la publicación reportada y cerrar sus reportes pendientes (solo admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Publicación eliminada' }, 409: { description: 'Ya resuelto' } },
+      },
+    },
+    '/admin/usuarios': {
+      get: {
+        tags: ['Administración'],
+        summary: 'Listar usuarios registrados con su calificación (solo admin)',
+        security: [{ bearerAuth: [] }],
+        responses: { 200: { description: 'Usuarios' } },
+      },
+    },
+    '/admin/usuarios/{id}': {
+      get: {
+        tags: ['Administración'],
+        summary: 'Perfil de un usuario con sus publicaciones (solo admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Usuario' }, 404: { description: 'No encontrado' } },
+      },
+    },
+    '/admin/usuarios/{id}/suspension': {
+      patch: {
+        tags: ['Administración'],
+        summary: 'Suspender o reactivar una cuenta (solo admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { suspendido: { type: 'boolean' } } } } } },
+        responses: { 200: { description: 'Usuario actualizado' } },
+      },
+    },
+    '/admin/donaciones': {
+      get: {
+        tags: ['Administración'],
+        summary: 'Historial de donaciones completadas (solo admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'desde', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'hasta', in: 'query', schema: { type: 'string', format: 'date' } },
+        ],
+        responses: { 200: { description: 'Donaciones' } },
+      },
+    },
+    '/admin/publicaciones/{id}/caducidad': {
+      patch: {
+        tags: ['Administración'],
+        summary: 'Definir en cuántos días vence una publicación (solo admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { diasRestantes: { type: 'integer', minimum: 1, maximum: 365 } } } } } },
+        responses: { 200: { description: 'Publicación actualizada' }, 400: { description: 'Días inválidos' } },
+      },
+    },
+    '/admin/publicaciones/{id}': {
+      delete: {
+        tags: ['Administración'],
+        summary: 'Eliminar una publicación y cerrar sus reportes pendientes (solo admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 204: { description: 'Eliminada' } },
+      },
+    },
     '/notificaciones': {
       get: {
         tags: ['Solicitudes'],
