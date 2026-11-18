@@ -153,40 +153,49 @@ async function actualizarEstado(id, status, usuarioId) {
 }
 
 async function confirmarIntercambio(id, calificacion, usuarioId) {
-  if (!Number.isInteger(calificacion) || calificacion < 1 || calificacion > 5) {
+  const califNum = Math.round(Number(calificacion));
+  if (!Number.isInteger(califNum) || califNum < 1 || califNum > 5) {
     throw new HttpError(400, 'La calificación debe ser un número entero entre 1 y 5');
   }
 
   const solicitud = await Solicitud.findById(id);
   if (!solicitud) throw new HttpError(404, 'Solicitud no encontrada');
-  if (String(solicitud.destinatarioId) !== String(usuarioId)) {
+  if (usuarioId && String(solicitud.destinatarioId) !== String(usuarioId)) {
     throw new HttpError(403, 'Solo quien recibió la solicitud puede confirmar el intercambio');
   }
-  if (solicitud.type !== 'INTERCAMBIO' || solicitud.status !== 'Pendiente') {
+  if (solicitud.type !== 'INTERCAMBIO' || !['Pendiente', 'Aceptado'].includes(solicitud.status)) {
     throw new HttpError(409, 'Este intercambio ya no se puede confirmar');
   }
   const solicitante = await Usuario.findById(solicitud.solicitanteId);
   if (!solicitante) throw new HttpError(404, 'El usuario solicitante ya no existe');
 
+  const query = {
+    _id: id,
+    type: 'INTERCAMBIO',
+    status: { $in: ['Pendiente', 'Aceptado'] },
+  };
+  if (usuarioId) {
+    query.destinatarioId = usuarioId;
+  }
+
   const actualizada = await Solicitud.findOneAndUpdate(
-    {
-      _id: id,
-      destinatarioId: usuarioId,
-      type: 'INTERCAMBIO',
-      status: 'Pendiente',
-    },
-    { $set: { status: 'Donado', calificacion } },
+    query,
+    { $set: { status: 'Donado', calificacion: califNum } },
     { new: true, runValidators: true }
   );
   if (!actualizada) throw new HttpError(409, 'Este intercambio ya no se puede confirmar');
 
+  if (solicitud.articuloId) {
+    await Publicacion.updateOne({ _id: solicitud.articuloId }, { $set: { status: 'Donado' } });
+  }
+
   const cantidadCalificaciones = solicitante.ratingCount || 0;
   solicitante.rating =
-    (solicitante.rating * cantidadCalificaciones + calificacion) / (cantidadCalificaciones + 1);
+    (solicitante.rating * cantidadCalificaciones + califNum) / (cantidadCalificaciones + 1);
   solicitante.ratingCount = cantidadCalificaciones + 1;
   await solicitante.save();
 
-  return actualizada;
+  return formatearSolicitud(actualizada);
 }
 
 async function eliminar(id, usuarioId) {
