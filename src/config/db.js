@@ -2,7 +2,6 @@ const mongoose = require('mongoose');
 const dns = require('dns');
 
 // En entornos Windows, las consultas SRV de MongoDB Atlas a veces fallan con ECONNREFUSED
-// Configurar servidores DNS públicos confiables (Google / Cloudflare) resuelve este problema.
 try {
   dns.setServers(['8.8.8.8', '1.1.1.1']);
 } catch {

@@ -1,10 +1,12 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const swaggerUi = require('swagger-ui-express');
 const documentacion = require('./docs/openapi');
 const publicacionesRouter = require('./routes/publicaciones.routes');
 const authRouter = require('./routes/auth.routes');
 const solicitudesRouter = require('./routes/solicitudes.routes');
+const notificacionesRouter = require('./routes/notificaciones.routes');
 const { rutaNoEncontrada, manejarErrores } = require('./middlewares/manejarErrores');
 
 const app = express();
@@ -12,6 +14,8 @@ const app = express();
 // 1. Middlewares globales
 app.use(cors());
 app.use(express.json());
+app.use(express.json({ limit: '30mb' }));
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 // 2. Documentación Swagger y rutas de diagnóstico
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(documentacion));
@@ -23,6 +27,7 @@ app.use('/api/publicaciones', publicacionesRouter);
 app.use('/api/articulos', publicacionesRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/solicitudes', solicitudesRouter);
+app.use('/api/notificaciones', notificacionesRouter);
 
 // 4. Manejo de rutas no encontradas y errores centralizados
 app.use(rutaNoEncontrada);

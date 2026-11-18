@@ -2,7 +2,7 @@ const servicio = require('../services/solicitudes.service');
 
 async function listar(req, res, next) {
   try {
-    const solicitudes = await servicio.listar(req.query);
+    const solicitudes = await servicio.listar(req.query, req.usuario);
     res.status(200).json(solicitudes);
   } catch (error) {
     next(error);
@@ -20,7 +20,7 @@ async function obtener(req, res, next) {
 
 async function crear(req, res, next) {
   try {
-    const nueva = await servicio.crear(req.body);
+    const nueva = await servicio.crear(req.body, req.usuario);
     res.status(201).json(nueva);
   } catch (error) {
     next(error);
@@ -29,7 +29,7 @@ async function crear(req, res, next) {
 
 async function actualizar(req, res, next) {
   try {
-    const actualizada = await servicio.actualizar(req.params.id, req.body);
+    const actualizada = await servicio.actualizar(req.params.id, req.body, req.usuario);
     res.status(200).json(actualizada);
   } catch (error) {
     next(error);
@@ -38,7 +38,7 @@ async function actualizar(req, res, next) {
 
 async function eliminar(req, res, next) {
   try {
-    await servicio.eliminar(req.params.id);
+    await servicio.eliminar(req.params.id, req.usuario);
     res.status(204).send();
   } catch (error) {
     next(error);

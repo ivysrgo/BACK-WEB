@@ -9,6 +9,15 @@ async function listar(req, res, next) {
   }
 }
 
+async function listarMias(req, res, next) {
+  try {
+    const publicaciones = await servicio.listarPorUsuario(req.usuario._id);
+    res.status(200).json(publicaciones);
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function obtener(req, res, next) {
   try {
     const publicacion = await servicio.obtener(req.params.id);
@@ -20,7 +29,7 @@ async function obtener(req, res, next) {
 
 async function crear(req, res, next) {
   try {
-    const nueva = await servicio.crear(req.body);
+    const nueva = await servicio.crear(req.body, req.usuario);
     res.status(201).json(nueva);
   } catch (error) {
     next(error);
@@ -29,7 +38,7 @@ async function crear(req, res, next) {
 
 async function actualizar(req, res, next) {
   try {
-    const actualizada = await servicio.actualizar(req.params.id, req.body);
+    const actualizada = await servicio.actualizar(req.params.id, req.body, req.usuario);
     res.status(200).json(actualizada);
   } catch (error) {
     next(error);
@@ -38,7 +47,7 @@ async function actualizar(req, res, next) {
 
 async function eliminar(req, res, next) {
   try {
-    await servicio.eliminar(req.params.id);
+    await servicio.eliminar(req.params.id, req.usuario);
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -47,6 +56,7 @@ async function eliminar(req, res, next) {
 
 module.exports = {
   listar,
+  listarMias,
   obtener,
   crear,
   actualizar,

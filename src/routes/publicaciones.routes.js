@@ -4,15 +4,16 @@ const {
   validarCreacionPublicacion,
   validarCambioPublicacion,
 } = require('../middlewares/validarErrores');
-const { verificarTokenOpcional } = require('../middlewares/auth.middleware');
+const { verificarToken } = require('../middlewares/auth.middleware');
 
 const router = Router();
 
-router.get('/', verificarTokenOpcional, controlador.listar);
+router.get('/', controlador.listar);
+router.get('/mis-publicaciones', verificarToken, controlador.listarMias);
 router.get('/:id', controlador.obtener);
-router.post('/', verificarTokenOpcional, validarCreacionPublicacion, controlador.crear);
-router.patch('/:id', verificarTokenOpcional, validarCambioPublicacion, controlador.actualizar);
-router.put('/:id', verificarTokenOpcional, validarCambioPublicacion, controlador.actualizar);
-router.delete('/:id', verificarTokenOpcional, controlador.eliminar);
+router.post('/', verificarToken, validarCreacionPublicacion, controlador.crear);
+router.patch('/:id', verificarToken, validarCambioPublicacion, controlador.actualizar);
+router.put('/:id', verificarToken, validarCambioPublicacion, controlador.actualizar);
+router.delete('/:id', verificarToken, controlador.eliminar);
 
 module.exports = router;

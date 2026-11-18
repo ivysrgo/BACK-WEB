@@ -1,5 +1,6 @@
 const Publicacion = require('../models/publicacion.models');
 const HttpError = require('../utils/HttpError');
+const notificacionesService = require('./notificaciones.service');
 
 async function listar(filtros = {}) {
   const query = {};
@@ -36,6 +37,18 @@ async function listar(filtros = {}) {
   return await Publicacion.find(query).sort({ createdAt: -1 });
 }
 
+async function listarPorUsuario(usuarioId, usuario) {
+  const query = {
+    $or: [{ usuarioId }],
+  };
+
+  if (usuario && usuario.nombre) {
+    query.$or.push({ author: new RegExp(`^${usuario.nombre.trim()}$`, 'i') });
+  }
+
+  return await Publicacion.find(query).sort({ createdAt: -1 });
+}
+
 async function obtener(id) {
   const publicacion = await Publicacion.findById(id);
   if (!publicacion) {
@@ -44,30 +57,71 @@ async function obtener(id) {
   return publicacion;
 }
 
-async function crear(datos) {
-  const nueva = new Publicacion(datos);
+async function crear(datos, usuario) {
+  const payload = { ...datos };
+  if (usuario) {
+    payload.usuarioId = usuario._id || usuario.id;
+    payload.author = usuario.nombre || payload.author;
+  }
+  const nueva = new Publicacion(payload);
   return await nueva.save();
 }
 
-async function actualizar(id, cambios) {
-  const actualizada = await Publicacion.findByIdAndUpdate(id, cambios, {
-    new: true,
-    runValidators: true,
-  });
-
-  if (!actualizada) {
+async function actualizar(id, cambios, usuario) {
+  const publicacion = await Publicacion.findById(id);
+  if (!publicacion) {
     throw new HttpError(404, 'Publicación no encontrada');
+  }
+
+  // Validación de permisos si se provee usuario
+  if (usuario) {
+    const esAdmin = usuario.role === 'admin' || usuario.role === 'Administrador';
+    const esDuenio = publicacion.usuarioId && publicacion.usuarioId.toString() === (usuario._id || usuario.id).toString();
+    const coincideAutor = publicacion.author && usuario.nombre && publicacion.author.toLowerCase() === usuario.nombre.toLowerCase();
+
+    if (!esAdmin && publicacion.usuarioId && !esDuenio && !coincideAutor) {
+      throw new HttpError(403, 'No tienes permisos para modificar esta publicación');
+    }
+  }
+
+  const estadoAnterior = publicacion.status;
+  Object.assign(publicacion, cambios);
+  const actualizada = await publicacion.save();
+
+  // Si el artículo fue donado a Unidona, se crea una notificación para el propietario
+  if (cambios.status === 'Donado' && estadoAnterior !== 'Donado') {
+    const targetUserId = publicacion.usuarioId || (usuario ? (usuario._id || usuario.id) : null);
+    if (targetUserId) {
+      await notificacionesService.crearNotificacion({
+        usuarioId: targetUserId,
+        title: 'Artículo donado a Unidona',
+        message: `Tu artículo "${publicacion.title}" ha sido escalado exitosamente a la red de Unidona.`,
+        type: 'donacion',
+        referenciaId: publicacion.id,
+        link: '/publicaciones',
+      });
+    }
   }
 
   return actualizada;
 }
 
-async function eliminar(id) {
-  const eliminada = await Publicacion.findByIdAndDelete(id);
-  if (!eliminada) {
+async function eliminar(id, usuario) {
+  const publicacion = await Publicacion.findById(id);
+  if (!publicacion) {
     throw new HttpError(404, 'Publicación no encontrada');
   }
-  return eliminada;
+
+  if (usuario) {
+    const esAdmin = usuario.role === 'admin' || usuario.role === 'Administrador';
+    const esDuenio = publicacion.usuarioId && publicacion.usuarioId.toString() === (usuario._id || usuario.id).toString();
+    if (!esAdmin && publicacion.usuarioId && !esDuenio) {
+      throw new HttpError(403, 'No tienes permisos para eliminar esta publicación');
+    }
+  }
+
+  await Publicacion.findByIdAndDelete(id);
+  return publicacion;
 }
 
 // Sembrar datos iniciales si la colección está vacía
@@ -185,6 +239,7 @@ async function sembrarDatosIniciales() {
 
 module.exports = {
   listar,
+  listarPorUsuario,
   obtener,
   crear,
   actualizar,

@@ -37,7 +37,6 @@ async function verificarToken(req, res, next) {
       throw new HttpError(403, 'Tu cuenta está temporalmente bloqueada. Restablece tu contraseña.');
     }
 
-    // Inyectamos el usuario autenticado en la petición
     req.usuario = usuario;
     next();
   } catch (error) {
@@ -47,7 +46,6 @@ async function verificarToken(req, res, next) {
 
 /**
  * Middleware opcional: si hay token válido, inyecta req.usuario.
- * Si no hay token o es inválido, continúa sin error dejando req.usuario = null.
  */
 async function verificarTokenOpcional(req, res, next) {
   try {
@@ -103,13 +101,12 @@ function requerirRol(...rolesPermitidos) {
       return next(new HttpError(401, 'Usuario no autenticado'));
     }
 
-    // Normalizar aliases (ej. Administrador -> admin, Miembro de la comunidad -> user)
     const rolActual =
       req.usuario.role === 'Administrador'
         ? 'admin'
         : req.usuario.role === 'Miembro de la comunidad'
-        ? 'user'
-        : req.usuario.role;
+          ? 'user'
+          : req.usuario.role;
 
     const permitidosNormalizados = rolesPermitidos.map((r) =>
       r === 'Administrador' ? 'admin' : r === 'Miembro de la comunidad' ? 'user' : r
@@ -134,4 +131,3 @@ module.exports = {
   requerirAdmin,
   requerirRol,
 };
-

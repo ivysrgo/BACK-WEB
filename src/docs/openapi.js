@@ -15,6 +15,7 @@ module.exports = {
   tags: [
     { name: 'Publicaciones / Artículos', description: 'Operaciones CRUD para inventario de prendas y artículos' },
     { name: 'Solicitudes', description: 'Gestión de solicitudes de intercambio y donación' },
+    { name: 'Notificaciones', description: 'Alertas y notificaciones para usuarios de la comunidad' },
     { name: 'Autenticación', description: 'Registro, inicio de sesión y recuperación de contraseña' },
     { name: 'Salud', description: 'Comprobación de estado del servicio' },
   ],
@@ -447,6 +448,64 @@ module.exports = {
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         responses: {
           204: { description: 'Eliminada con éxito' },
+        },
+      },
+    },
+    '/notificaciones': {
+      get: {
+        tags: ['Notificaciones'],
+        summary: 'Listar notificaciones del usuario autenticado',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Lista de notificaciones del usuario' },
+          401: { description: 'No autorizado' },
+        },
+      },
+    },
+    '/notificaciones/no-leidas': {
+      get: {
+        tags: ['Notificaciones'],
+        summary: 'Contar notificaciones no leídas del usuario autenticado',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Conteo de no leídas',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    count: { type: 'integer', example: 2 },
+                    hasUnread: { type: 'boolean', example: true },
+                  },
+                },
+              },
+            },
+          },
+          401: { description: 'No autorizado' },
+        },
+      },
+    },
+    '/notificaciones/leer-todas': {
+      patch: {
+        tags: ['Notificaciones'],
+        summary: 'Marcar todas las notificaciones del usuario como leídas',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Todas marcadas como leídas' },
+          401: { description: 'No autorizado' },
+        },
+      },
+    },
+    '/notificaciones/{id}/leida': {
+      patch: {
+        tags: ['Notificaciones'],
+        summary: 'Marcar una notificación puntual como leída',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          200: { description: 'Notificación actualizada' },
+          404: { description: 'Notificación no encontrada' },
         },
       },
     },

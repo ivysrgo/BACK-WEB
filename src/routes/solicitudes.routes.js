@@ -4,13 +4,14 @@ const {
   validarCreacionSolicitud,
   validarCambioSolicitud,
 } = require('../middlewares/validarErrores');
+const { verificarTokenOpcional, verificarToken } = require('../middlewares/auth.middleware');
 
 const router = Router();
 
-router.get('/', controlador.listar);
-router.get('/:id', controlador.obtener);
-router.post('/', validarCreacionSolicitud, controlador.crear);
-router.patch('/:id', validarCambioSolicitud, controlador.actualizar);
-router.delete('/:id', controlador.eliminar);
+router.get('/', verificarTokenOpcional, controlador.listar);
+router.get('/:id', verificarTokenOpcional, controlador.obtener);
+router.post('/', verificarTokenOpcional, validarCreacionSolicitud, controlador.crear);
+router.patch('/:id', verificarTokenOpcional, validarCambioSolicitud, controlador.actualizar);
+router.delete('/:id', verificarToken, controlador.eliminar);
 
 module.exports = router;

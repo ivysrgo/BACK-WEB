@@ -47,6 +47,16 @@ const solicitudSchema = new mongoose.Schema(
       type: Number,
       default: 15,
     },
+    solicitanteId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Usuario',
+      default: null,
+    },
+    propietarioId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Usuario',
+      default: null,
+    },
   },
   {
     timestamps: true,

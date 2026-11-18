@@ -11,7 +11,7 @@ function validarCreacionPublicacion(req, res, next) {
   const description = body.description || body.descripcion || '';
   const details = body.details || body.detalles || '';
   const author = req.usuario?.nombre || body.author || body.autor || 'Juan José Perez Cespedes';
-  const usuarioId = req.usuario?.id || body.usuarioId || null;
+  const usuarioId = req.usuario?._id || req.usuario?.id || body.usuarioId || null;
   const imageUrl = body.imageUrl || body.imagenUrl || body.imagen;
   const talla = body.talla || '';
   const genero = body.genero || '';

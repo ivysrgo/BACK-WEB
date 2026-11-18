@@ -25,6 +25,7 @@ async function iniciarServidor() {
       console.log(`📌 PUBLICACIONES:   http://localhost:${PORT}/api/publicaciones`);
       console.log(`📌 ARTÍCULOS:       http://localhost:${PORT}/api/articulos`);
       console.log(`📌 SOLICITUDES:     http://localhost:${PORT}/api/solicitudes`);
+      console.log(`📌 NOTIFICACIONES:  http://localhost:${PORT}/api/notificaciones`);
       console.log(`📌 AUTENTICACIÓN:   http://localhost:${PORT}/api/auth/login`);
       console.log(`📚 DOCUMENTACIÓN:   http://localhost:${PORT}/api/docs`);
       console.log('====================================================');
