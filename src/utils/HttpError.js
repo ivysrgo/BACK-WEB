@@ -1,8 +1,8 @@
-// Clase para manejo centralizado de errores HTTP
 class HttpError extends Error {
-  constructor(status, message) {
+  constructor(statusCode, message) {
     super(message);
-    this.statusCode = status;
+    this.statusCode = statusCode;
+    this.name = 'HttpError';
   }
 }
 

@@ -63,7 +63,6 @@ const usuarioSchema = new mongoose.Schema(
         delete ret._id;
         delete ret.contrasena;
         delete ret.pinRecuperacion;
-        // Normalizamos el rol para el cliente
         if (ret.role === 'Administrador') ret.role = 'admin';
         if (ret.role === 'Miembro de la comunidad') ret.role = 'user';
       },
@@ -71,30 +70,24 @@ const usuarioSchema = new mongoose.Schema(
   }
 );
 
-// Middleware pre-save para hashear la contraseña automáticamente si ha sido modificada
 usuarioSchema.pre('save', async function () {
   if (!this.isModified('contrasena')) return;
 
-  // Si ya viene con formato bcrypt hash ($2a$ / $2b$), no rehashear
   if (/^\$2[ab]\$\d+\$/.test(this.contrasena)) return;
 
   const salt = await bcrypt.genSalt(10);
   this.contrasena = await bcrypt.hash(this.contrasena, salt);
 });
 
-// Método de instancia para verificar si la contraseña coincide (con soporte bcrypt y retrocompatibilidad)
 usuarioSchema.methods.compararContrasena = async function (candidata) {
   if (!this.contrasena || !candidata) return false;
 
-  // 1. Verificación estándar con bcrypt
   const esHash = /^\$2[ab]\$\d+\$/.test(this.contrasena);
   if (esHash) {
     return await bcrypt.compare(candidata, this.contrasena);
   }
 
-  // 2. Retrocompatibilidad para usuarios sembrados previamente en texto plano
   if (this.contrasena === candidata) {
-    // Si coincidió en texto plano, actualizamos a hash inmediatamente
     const salt = await bcrypt.genSalt(10);
     this.contrasena = await bcrypt.hash(candidata, salt);
     await this.save();
@@ -104,7 +97,6 @@ usuarioSchema.methods.compararContrasena = async function (candidata) {
   return false;
 };
 
-// Método de conveniencia para verificar si es administrador
 usuarioSchema.methods.esAdmin = function () {
   return this.role === 'admin' || this.role === 'Administrador';
 };

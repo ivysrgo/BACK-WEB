@@ -15,12 +15,10 @@ async function login({ correo, contrasena }) {
     throw new HttpError(401, 'Credenciales incorrectas');
   }
 
-  // Verificar si la cuenta se encuentra bloqueada por intentos fallidos
   if (usuario.bloqueado) {
     throw new HttpError(403, 'Demasiados intentos, intenta más tarde');
   }
 
-  // Verificar coincidencia de contraseña utilizando bcrypt (con soporte retrocompatible)
   const esValida = await usuario.compararContrasena(contrasena);
 
   if (!esValida) {
@@ -34,18 +32,15 @@ async function login({ correo, contrasena }) {
     throw new HttpError(401, 'Credenciales incorrectas');
   }
 
-  // Reiniciar intentos al autenticar correctamente
   usuario.intentosFallidos = 0;
   usuario.bloqueado = false;
   await usuario.save();
 
-  // Rol normalizado para frontend
   const rolNormalizado =
     usuario.role === 'Administrador' || usuario.role === 'admin'
       ? 'admin'
       : 'user';
 
-  // Generar JWT seguro
   const token = jwt.sign(
     {
       id: usuario.id,
@@ -85,7 +80,7 @@ async function registrar({ nombre, correo, contrasena, phone }) {
   const nuevoUsuario = new Usuario({
     nombre: nombre.trim(),
     correo: correoLimpio,
-    contrasena, // el pre-save hook de Mongoose se encargará de hashearlo con bcrypt
+    contrasena,
     phone: phone ? String(phone).trim() : '',
     role: 'user',
     rating: 5,
@@ -93,7 +88,6 @@ async function registrar({ nombre, correo, contrasena, phone }) {
 
   await nuevoUsuario.save();
 
-  // Generar token automático al registrarse exitosamente
   const token = jwt.sign(
     {
       id: nuevoUsuario.id,
@@ -152,7 +146,6 @@ async function solicitarRecuperacion(correo) {
     throw new HttpError(404, 'No existe una cuenta registrada con ese correo electrónico');
   }
 
-  // Generación de PIN de 4 dígitos (simulado '1234')
   const pin = '1234';
   usuario.pinRecuperacion = pin;
   await usuario.save();
@@ -194,7 +187,6 @@ async function restablecerContrasena(correo, pin, nuevaContrasena) {
     throw new HttpError(400, 'PIN inválido');
   }
 
-  // Se asigna la nueva contraseña (el hook pre-save la hasheará con bcrypt)
   usuario.contrasena = nuevaContrasena;
   usuario.pinRecuperacion = null;
   usuario.bloqueado = false;
@@ -208,12 +200,11 @@ async function restablecerContrasena(correo, pin, nuevaContrasena) {
 
 /**
  * Semillero inicial de usuarios en MongoDB Atlas:
- * 1. Crea el Administrador: admin@ecogolgi.com / Admin123* (role: 'admin')
- * 2. Crea el Usuario normal: juanelpro2005@gmail.com / 123456 (role: 'user')
+ * 1. Administrador: admin@ecogolgi.com / Admin123* (role: 'admin')
+ * 2. Usuario normal: juanelpro2005@gmail.com / 123456 (role: 'user')
  */
 async function sembrarUsuariosIniciales() {
   try {
-    // 1. Verificar o sembrar Administrador
     const adminExiste = await Usuario.findOne({ correo: 'admin@ecogolgi.com' });
     if (!adminExiste) {
       console.log('Sembrando usuario Administrador en MongoDB Atlas...');
@@ -227,15 +218,11 @@ async function sembrarUsuariosIniciales() {
         avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
       });
       console.log('✔ Administrador creado: admin@ecogolgi.com / Admin123* (Rol: admin)');
-    } else {
-      // Si existía con rol descriptivo, aseguramos rol admin
-      if (adminExiste.role !== 'admin') {
-        adminExiste.role = 'admin';
-        await adminExiste.save();
-      }
+    } else if (adminExiste.role !== 'admin') {
+      adminExiste.role = 'admin';
+      await adminExiste.save();
     }
 
-    // 2. Verificar o sembrar Usuario Normal de prueba
     const userExiste = await Usuario.findOne({ correo: 'juanelpro2005@gmail.com' });
     if (!userExiste) {
       console.log('Sembrando usuario normal en MongoDB Atlas...');
@@ -249,11 +236,9 @@ async function sembrarUsuariosIniciales() {
         avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
       });
       console.log('✔ Usuario normal creado: juanelpro2005@gmail.com / 123456 (Rol: user)');
-    } else {
-      if (userExiste.role === 'Miembro de la comunidad') {
-        userExiste.role = 'user';
-        await userExiste.save();
-      }
+    } else if (userExiste.role === 'Miembro de la comunidad') {
+      userExiste.role = 'user';
+      await userExiste.save();
     }
   } catch (error) {
     console.error('Error al sembrar usuarios en MongoDB:', error.message);
