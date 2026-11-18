@@ -1,5 +1,6 @@
 const Publicacion = require('../models/publicacion.models');
 const Solicitud = require('../models/solicitud.models');
+const Reporte = require('../models/reporte.models');
 
 // Una publicación se avisa como "próxima a caducar" cuando le quedan estos días o menos
 const DIAS_AVISO_CADUCIDAD = 7;
@@ -20,9 +21,61 @@ function textoSolicitudes(cantidad) {
 }
 
 /**
- * Arma las notificaciones del usuario a partir de sus propias publicaciones y solicitudes.
+ * Arma las notificaciones del usuario o administrador a partir de datos reales de MongoDB.
  */
-async function listarDeUsuario(usuarioId) {
+async function listarDeUsuario(usuarioParam) {
+  const usuarioId = typeof usuarioParam === 'object' && usuarioParam !== null
+    ? usuarioParam.id || usuarioParam._id
+    : usuarioParam;
+  const esAdmin = typeof usuarioParam === 'object' && usuarioParam !== null
+    ? usuarioParam.role === 'admin' || usuarioParam.role === 'Administrador'
+    : false;
+
+  // Si es administrador, construir notificaciones basadas en reportes y caducidades globales reales
+  if (esAdmin) {
+    const [reportesPendientes, publicacionesComunidad] = await Promise.all([
+      Reporte.find({ estado: 'Pendiente' }).sort({ createdAt: -1 }),
+      Publicacion.find({ status: 'Disponible' }),
+    ]);
+
+    const notificacionesAdmin = [];
+
+    if (reportesPendientes.length > 0) {
+      notificacionesAdmin.push({
+        id: 'admin-reports',
+        type: 'reporte',
+        title: 'Reportes pendientes',
+        message: `${reportesPendientes.length} reporte(s) requieren moderación administrativa`,
+        details: [
+          reportesPendientes.length === 1
+            ? '1 reporte requiere revisión'
+            : `${reportesPendientes.length} reportes requieren revisión`,
+        ],
+        path: '/admin/reportes',
+        link: '/admin/reportes',
+        read: false,
+      });
+    }
+
+    publicacionesComunidad.forEach((pub) => {
+      const diasRestantes = Math.max(0, (pub.expirationDays || 30) - diasTranscurridos(pub));
+      if (diasRestantes <= 5) {
+        notificacionesAdmin.push({
+          id: `caducidad-${pub.id}`,
+          type: 'caducar',
+          title: pub.title,
+          message: `${diasRestantes} días restantes antes de caducar`,
+          details: [`${diasRestantes} días restantes`],
+          path: `/admin/articulo/${pub.id}`,
+          link: `/admin/articulo/${pub.id}`,
+          read: false,
+        });
+      }
+    });
+
+    return notificacionesAdmin;
+  }
+
   const limiteRespuestas = new Date(Date.now() - DIAS_AVISO_RESPUESTA * MS_POR_DIA);
 
   const [publicaciones, pendientesRecibidas, respuestas] = await Promise.all([

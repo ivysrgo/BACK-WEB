@@ -113,7 +113,23 @@ async function eliminar(id, usuario) {
   if (!publicacion) {
     throw new HttpError(404, 'Publicación no encontrada');
   }
+
+  if (usuario && usuario.role !== 'admin' && usuario.role !== 'Administrador') {
+    if (publicacion.usuarioId && String(publicacion.usuarioId) !== String(usuario._id || usuario.id)) {
+      throw new HttpError(403, 'No tienes permiso para eliminar esta publicación');
+    }
+  }
+
+  if (Array.isArray(publicacion.imageUrls) && publicacion.imageUrls.length > 0) {
+    try {
+      await eliminarImagenesPublicacion(publicacion.imageUrls);
+    } catch (e) {
+      console.warn('Error al limpiar imágenes de publicación eliminada:', e.message);
+    }
+  }
+
   await Favorito.deleteMany({ articuloId: id });
+  const eliminada = await Publicacion.findByIdAndDelete(id);
   return eliminada;
 }
 

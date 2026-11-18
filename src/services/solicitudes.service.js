@@ -31,6 +31,24 @@ async function listar(filtros = {}, usuario = null) {
   }));
 }
 
+function formatearSolicitud(s) {
+  return {
+    id: String(s._id),
+    _id: s._id,
+    type: String(s.type).toUpperCase().includes('INTER') ? 'INTERCAMBIO' : 'DONACIÓN',
+    title: s.title,
+    author: s.author,
+    message: s.message,
+    date: s.date || 'Reciente',
+    status: s.status,
+    articuloId: String(s.articuloId),
+    articuloOfrecidoId: s.articuloOfrecidoId ? String(s.articuloOfrecidoId) : undefined,
+    solicitanteId: String(s.solicitanteId),
+    destinatarioId: String(s.destinatarioId),
+    calificacion: s.calificacion ?? null,
+  };
+}
+
 async function listarDeUsuario(usuarioId) {
   const [enviadas, recibidas, historial, favoritos] = await Promise.all([
     Solicitud.find({ solicitanteId: usuarioId, status: { $in: ESTADOS_EN_CURSO } }).sort({ createdAt: -1 }),
@@ -42,7 +60,12 @@ async function listarDeUsuario(usuarioId) {
     Favorito.countDocuments({ usuarioId }),
   ]);
 
-  return { enviadas, recibidas, historial, favoritos };
+  return {
+    enviadas: enviadas.map(formatearSolicitud),
+    recibidas: recibidas.map(formatearSolicitud),
+    historial: historial.map(formatearSolicitud),
+    favoritos,
+  };
 }
 
 async function obtener(id, usuarioId) {

@@ -27,8 +27,11 @@ module.exports = {
   actualizarCaducidad: manejar(async (req, res) => {
     res.status(200).json(await servicio.actualizarCaducidad(req.params.id, req.body?.diasRestantes));
   }),
+  obtenerMetricas: manejar(async (req, res) => {
+    res.status(200).json(await servicio.obtenerMetricas());
+  }),
   eliminarPublicacion: manejar(async (req, res) => {
-    await publicacionesServicio.eliminar(req.params.id);
+    await publicacionesServicio.eliminar(req.params.id, req.usuario);
     await reportesServicio.resolverPendientesDe(req.params.id, 'Eliminada', req.usuario._id);
     res.status(204).send();
   }),

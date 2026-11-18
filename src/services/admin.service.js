@@ -149,23 +149,61 @@ async function listarDonaciones({ desde, hasta } = {}) {
   return donaciones.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 }
 
-// El administrador indica en cuántos días vence la publicación a partir de hoy.
-async function actualizarCaducidad(publicacionId, diasRestantes) {
+// El administrador añade días adicionales al tiempo de caducidad de la publicación.
+async function actualizarCaducidad(publicacionId, diasSumar) {
   if (!mongoose.Types.ObjectId.isValid(publicacionId)) {
     throw new HttpError(404, 'Publicación no encontrada');
   }
-  const dias = Number(diasRestantes);
+  const dias = Number(diasSumar);
   if (!Number.isInteger(dias) || dias < 1 || dias > 365) {
-    throw new HttpError(400, 'Los días de vencimiento deben ser un número entero entre 1 y 365');
+    throw new HttpError(400, 'Los días a sumar deben ser un número entero entre 1 y 365');
   }
 
   const publicacion = await Publicacion.findById(publicacionId);
   if (!publicacion) throw new HttpError(404, 'Publicación no encontrada');
 
-  publicacion.expirationDays = (publicacion.daysElapsed ?? 0) + dias;
+  const baseExpiration = publicacion.expirationDays ?? 30;
+  publicacion.expirationDays = baseExpiration + dias;
   if (publicacion.status === 'Caducado') publicacion.status = 'Disponible';
   await publicacion.save();
   return publicacion;
+}
+
+// Métricas globales reales de la comunidad y del sistema para el panel de administración
+async function obtenerMetricas() {
+  const [
+    donadosComunidad,
+    intercambiadosComunidad,
+    donadosUnidona,
+    reportesComunidad,
+    calificaciones,
+  ] = await Promise.all([
+    Solicitud.countDocuments({ status: 'Donado', type: { $in: ['DONACIÓN', 'Donación'] } }),
+    Solicitud.countDocuments({ status: 'Donado', type: { $in: ['INTERCAMBIO', 'Intercambio'] } }),
+    Publicacion.countDocuments({ status: { $in: ['Donado', 'Caducado'] } }),
+    Reporte.countDocuments({}),
+    Solicitud.find({ status: 'Donado', calificacion: { $exists: true, $ne: null } }, 'calificacion'),
+  ]);
+
+  let promedio = 5.0;
+  if (calificaciones.length > 0) {
+    const suma = calificaciones.reduce((acc, c) => acc + (c.calificacion || 0), 0);
+    promedio = Number((suma / calificaciones.length).toFixed(1));
+  } else {
+    const usuariosConRating = await Usuario.find({ rating: { $gt: 0 } }, 'rating');
+    if (usuariosConRating.length > 0) {
+      const suma = usuariosConRating.reduce((acc, u) => acc + u.rating, 0);
+      promedio = Number((suma / usuariosConRating.length).toFixed(1));
+    }
+  }
+
+  return [
+    { id: 'm1', valor: donadosComunidad, descripcion: 'Artículos donados entre la comunidad' },
+    { id: 'm2', valor: intercambiadosComunidad, descripcion: 'Artículos intercambiados entre la comunidad' },
+    { id: 'm3', valor: donadosUnidona, descripcion: 'Artículos donados a Unidona' },
+    { id: 'm4', valor: reportesComunidad, descripcion: 'Reportes de publicaciones de la comunidad' },
+    { id: 'm5', valor: promedio, descripcion: 'Calificación promedio de los intercambios de la comunidad' },
+  ];
 }
 
 module.exports = {
@@ -174,4 +212,5 @@ module.exports = {
   cambiarSuspension,
   listarDonaciones,
   actualizarCaducidad,
+  obtenerMetricas,
 };
