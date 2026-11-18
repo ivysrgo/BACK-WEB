@@ -105,6 +105,7 @@ Una vez iniciado el servidor, accede a la interfaz interactiva para probar todos
 | Método | Endpoint | Descripción | Parámetros / Query |
 | :--- | :--- | :--- | :--- |
 | `GET` | `/api/publicaciones` | Listar publicaciones | `categoria`, `estado`, `modalidad`, `q` |
+| `GET` | `/api/publicaciones/mis-publicaciones` | Listar publicaciones del usuario autenticado | Header `Authorization: Bearer <token>` |
 | `GET` | `/api/publicaciones/:id` | Detalle de publicación por ID | `id` en path |
 | `POST` | `/api/publicaciones` | Crear nueva publicación | Body JSON con datos de la prenda |
 | `PUT` | `/api/publicaciones/:id` | Actualización completa | `id` en path, Body JSON |
@@ -131,6 +132,16 @@ Una vez iniciado el servidor, accede a la interfaz interactiva para probar todos
 | `POST` | `/api/solicitudes` | Crear nueva solicitud de donación o intercambio |
 | `PATCH` | `/api/solicitudes/:id` | Cambiar estado (`Pendiente`, `Aceptado`, `Donado`, `Rechazado`) o favorito |
 | `DELETE`| `/api/solicitudes/:id` | Eliminar solicitud por ID |
+
+### 4. Notificaciones (`/api/notificaciones`)
+
+| Método | Endpoint | Descripción |
+| :--- | :--- | :--- |
+| `GET` | `/api/notificaciones` | Listar notificaciones del usuario autenticado |
+| `GET` | `/api/notificaciones/no-leidas` | Obtener conteo de notificaciones sin leer (activa la campanita) |
+| `PATCH` | `/api/notificaciones/leer-todas` | Marcar todas las notificaciones como leídas |
+| `PATCH` | `/api/notificaciones/:id/leida` | Marcar una notificación puntual como leída |
+| `DELETE`| `/api/notificaciones/:id` | Eliminar notificación |
 
 ---
 
