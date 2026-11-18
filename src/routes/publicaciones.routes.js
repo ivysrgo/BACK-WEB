@@ -9,6 +9,7 @@ const { verificarToken, verificarTokenOpcional } = require('../middlewares/auth.
 const router = Router();
 
 router.get('/', verificarTokenOpcional, controlador.listar);
+router.get('/estadisticas', controlador.obtenerEstadisticas);
 router.get('/mis-publicaciones', verificarToken, controlador.listarMisPublicaciones);
 router.get('/:id', controlador.obtener);
 router.post('/', verificarToken, validarCreacionPublicacion, controlador.crear);

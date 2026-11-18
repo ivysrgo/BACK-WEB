@@ -1,4 +1,5 @@
 const Publicacion = require('../models/publicacion.models');
+const Solicitud = require('../models/solicitud.models');
 const Favorito = require('../models/favorito.models');
 const HttpError = require('../utils/HttpError');
 const { guardarImagenesPublicacion, eliminarImagenesPublicacion } = require('../utils/imagenesPublicacion');
@@ -153,6 +154,53 @@ async function sembrarDatosIniciales() {
   }
 }
 
+async function obtenerEstadisticas() {
+  const [
+    articulosDisponibles,
+    intercambiosSolicitud,
+    intercambiosPublicacion,
+    donacionesSolicitud,
+    donacionesPublicacion,
+    caducadosPublicacion,
+  ] = await Promise.all([
+    Publicacion.countDocuments({ status: { $ne: 'Donado' } }),
+    Solicitud.countDocuments({
+      type: { $regex: /inter/i },
+      status: { $in: ['Donado', 'Aceptado'] },
+    }),
+    Publicacion.countDocuments({
+      modality: { $regex: /inter/i },
+      status: 'Donado',
+    }),
+    Solicitud.countDocuments({
+      type: { $regex: /dona/i },
+      status: 'Donado',
+    }),
+    Publicacion.countDocuments({
+      modality: { $regex: /dona/i },
+      status: 'Donado',
+    }),
+    Publicacion.countDocuments({
+      status: 'Caducado',
+    }),
+  ]);
+
+  const intercambiosLocales = Math.max(intercambiosSolicitud, intercambiosPublicacion);
+  const escaladosUnidona = Math.max(
+    donacionesSolicitud + caducadosPublicacion,
+    donacionesPublicacion + caducadosPublicacion
+  );
+  const totalCirculados = articulosDisponibles + intercambiosLocales + escaladosUnidona;
+  const residuosEvitadosKg = Math.round(totalCirculados * 2.5);
+
+  return {
+    articulosDisponibles,
+    intercambiosLocales,
+    escaladosUnidona,
+    residuosEvitadosKg,
+  };
+}
+
 module.exports = {
   listar,
   listarDeUsuario,
@@ -161,4 +209,5 @@ module.exports = {
   actualizar,
   eliminar,
   sembrarDatosIniciales,
+  obtenerEstadisticas,
 };

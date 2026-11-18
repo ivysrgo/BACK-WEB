@@ -54,6 +54,15 @@ async function eliminar(req, res, next) {
   }
 }
 
+async function obtenerEstadisticas(req, res, next) {
+  try {
+    const estadisticas = await servicio.obtenerEstadisticas();
+    res.status(200).json(estadisticas);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   listar,
   listarMisPublicaciones,
@@ -61,4 +70,5 @@ module.exports = {
   crear,
   actualizar,
   eliminar,
+  obtenerEstadisticas,
 };
