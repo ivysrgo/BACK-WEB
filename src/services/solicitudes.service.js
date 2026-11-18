@@ -7,6 +7,30 @@ const HttpError = require('../utils/HttpError');
 const ESTADOS_EN_CURSO = ['Pendiente', 'Aceptado'];
 const ESTADOS_HISTORIAL = ['Donado', 'Rechazado', 'Cancelado'];
 
+async function listar(filtros = {}, usuario = null) {
+  const query = {};
+  if (filtros.status) query.status = filtros.status;
+  if (filtros.type) query.type = filtros.type;
+  if (filtros.tipo) query.type = filtros.tipo;
+  if (usuario && usuario.id) {
+    query.$or = [{ solicitanteId: usuario.id }, { destinatarioId: usuario.id }];
+  }
+  const lista = await Solicitud.find(query).sort({ createdAt: -1 });
+  return lista.map((s) => ({
+    id: String(s._id),
+    type: s.type,
+    title: s.title,
+    author: s.author,
+    message: s.message,
+    date: s.date,
+    status: s.status,
+    solicitanteId: String(s.solicitanteId),
+    destinatarioId: String(s.destinatarioId),
+    articuloId: s.articuloId,
+    articuloOfrecidoId: s.articuloOfrecidoId,
+  }));
+}
+
 async function listarDeUsuario(usuarioId) {
   const [enviadas, recibidas, historial, favoritos] = await Promise.all([
     Solicitud.find({ solicitanteId: usuarioId, status: { $in: ESTADOS_EN_CURSO } }).sort({ createdAt: -1 }),
@@ -142,10 +166,25 @@ async function confirmarIntercambio(id, calificacion, usuarioId) {
   return actualizada;
 }
 
+async function eliminar(id, usuarioId) {
+  const solicitud = await Solicitud.findById(id);
+  if (!solicitud) throw new HttpError(404, 'Solicitud no encontrada');
+  if (
+    usuarioId &&
+    String(solicitud.solicitanteId) !== String(usuarioId) &&
+    String(solicitud.destinatarioId) !== String(usuarioId)
+  ) {
+    throw new HttpError(403, 'No tienes permiso para eliminar esta solicitud');
+  }
+  await Solicitud.findByIdAndDelete(id);
+}
+
 module.exports = {
+  listar,
   listarDeUsuario,
   obtener,
   crear,
   actualizarEstado,
   confirmarIntercambio,
+  eliminar,
 };
