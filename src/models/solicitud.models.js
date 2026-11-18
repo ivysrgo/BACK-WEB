@@ -28,24 +28,32 @@ const solicitudSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['Pendiente', 'Aceptado', 'Donado', 'Rechazado'],
+      enum: ['Pendiente', 'Aceptado', 'Donado', 'Rechazado', 'Cancelado'],
       default: 'Pendiente',
+    },
+    solicitanteId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Usuario',
+      required: true,
+    },
+    destinatarioId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Usuario',
+      required: true,
     },
     articuloId: {
       type: String,
-      default: null,
+      required: true,
     },
     articuloOfrecidoId: {
       type: String,
       default: null,
     },
-    esFavorito: {
-      type: Boolean,
-      default: false,
-    },
-    daysRemaining: {
+    calificacion: {
       type: Number,
-      default: 15,
+      min: 1,
+      max: 5,
+      default: null,
     },
     solicitanteId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -65,7 +73,6 @@ const solicitudSchema = new mongoose.Schema(
       versionKey: false,
       transform: (_, ret) => {
         ret.id = ret._id.toString();
-        ret.isFavorite = ret.esFavorito;
         delete ret._id;
       },
     },

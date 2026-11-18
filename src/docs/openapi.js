@@ -20,6 +20,13 @@ module.exports = {
     { name: 'Salud', description: 'Comprobación de estado del servicio' },
   ],
   components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+      },
+    },
     schemas: {
       Publicacion: {
         type: 'object',
@@ -35,6 +42,7 @@ module.exports = {
           status: { type: 'string', enum: ['Disponible', 'Reservado', 'Donado', 'Caducado'], example: 'Disponible' },
           daysElapsed: { type: 'integer', example: 12 },
           imageUrl: { type: 'string', example: 'https://images.unsplash.com/photo-1576995853123-5a10305d93c0?w=500' },
+          imageUrls: { type: 'array', items: { type: 'string' }, description: 'URLs de las fotografías; imageUrl contiene la portada.' },
           author: { type: 'string', example: 'Camila Rojas' },
           publishedAt: { type: 'string', example: '2026-10-14' },
           tags: { type: 'array', items: { type: 'string' }, example: ['chaqueta', 'jean'] },
@@ -56,6 +64,12 @@ module.exports = {
           condition: { type: 'string', example: 'Como nuevo' },
           description: { type: 'string', example: 'Chaqueta de corte amplio.' },
           imageUrl: { type: 'string', example: 'https://images.unsplash.com/photo-1576995853123-5a10305d93c0' },
+          images: {
+            type: 'array',
+            maxItems: 5,
+            items: { type: 'string', description: 'Imagen JPG o PNG codificada como data URL.' },
+            description: 'Hasta 5 imágenes de máximo 5 MB cada una y 20 MB en total.',
+          },
           tags: { type: 'array', items: { type: 'string' } },
           talla: { type: 'string', example: 'M' },
           genero: { type: 'string', example: 'Unisex' },
@@ -72,19 +86,21 @@ module.exports = {
           author: { type: 'string', example: 'Camila Rojas' },
           message: { type: 'string', example: 'Ofrezco un impermeable para intercambio.' },
           date: { type: 'string', example: 'Hace 2 días' },
-          status: { type: 'string', enum: ['Pendiente', 'Aceptado', 'Donado', 'Rechazado'], example: 'Pendiente' },
-          esFavorito: { type: 'boolean', example: true },
-          daysRemaining: { type: 'integer', example: 4 },
+          status: { type: 'string', enum: ['Pendiente', 'Aceptado', 'Donado', 'Rechazado', 'Cancelado'], example: 'Pendiente' },
+          articuloId: { type: 'string', example: '672f6a15f9a0c1a2e3b4c5d6' },
+          solicitanteId: { type: 'string' },
+          destinatarioId: { type: 'string' },
         },
       },
       NuevaSolicitud: {
         type: 'object',
-        required: ['title', 'message'],
+        required: ['title', 'message', 'articuloId'],
         properties: {
           title: { type: 'string', example: 'Chaqueta de Jean Oversize' },
           message: { type: 'string', example: 'Tengo una prenda para intercambiar.' },
-          type: { type: 'string', example: 'INTERCAMBIO' },
-          author: { type: 'string', example: 'Usuario de la comunidad' },
+          type: { type: 'string', enum: ['DONACIÓN', 'INTERCAMBIO'], example: 'INTERCAMBIO' },
+          articuloId: { type: 'string' },
+          articuloOfrecidoId: { type: 'string' },
         },
       },
       UsuarioRegistro: {
@@ -189,6 +205,27 @@ module.exports = {
               },
             },
           },
+        },
+      },
+    },
+    '/publicaciones/mis-publicaciones': {
+      get: {
+        tags: ['Publicaciones / Artículos'],
+        summary: 'Listar las publicaciones del usuario autenticado',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Publicaciones del usuario',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'array',
+                  items: { $ref: '#/components/schemas/Publicacion' },
+                },
+              },
+            },
+          },
+          401: { description: 'Se requiere autenticación' },
         },
       },
     },
@@ -383,23 +420,174 @@ module.exports = {
         },
       },
     },
-    '/solicitudes': {
+    '/auth/cambiar-contrasena': {
+      patch: {
+        tags: ['Autenticación'],
+        summary: 'Cambiar la contraseña del usuario autenticado',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['contrasenaActual', 'nuevaContrasena'],
+                properties: {
+                  contrasenaActual: { type: 'string' },
+                  nuevaContrasena: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Contraseña actualizada correctamente' },
+          400: { description: 'Contraseña actual incorrecta o nueva contraseña insegura' },
+          401: { description: 'No autenticado' },
+        },
+      },
+    },
+    '/reportes': {
+      post: {
+        tags: ['Administración'],
+        summary: 'Reportar una publicación (usuario autenticado)',
+        security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['publicacionId', 'motivo'], properties: { publicacionId: { type: 'string' }, motivo: { type: 'string' }, descripcion: { type: 'string' } } } } } },
+        responses: { 201: { description: 'Reporte creado' }, 400: { description: 'Datos inválidos' }, 404: { description: 'Publicación no encontrada' } },
+      },
+      get: {
+        tags: ['Administración'],
+        summary: 'Listar reportes pendientes o el historial (solo admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'tipo', in: 'query', schema: { type: 'string', enum: ['pendientes', 'historial'] } }],
+        responses: { 200: { description: 'Lista de reportes' }, 403: { description: 'Requiere administrador' } },
+      },
+    },
+    '/reportes/{id}': {
+      get: {
+        tags: ['Administración'],
+        summary: 'Detalle de un reporte con datos del reportante y del usuario reportado (solo admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Reporte' }, 404: { description: 'No encontrado' } },
+      },
+    },
+    '/reportes/{id}/ignorar': {
+      patch: {
+        tags: ['Administración'],
+        summary: 'Ignorar un reporte pendiente (solo admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Reporte ignorado' }, 409: { description: 'Ya resuelto' } },
+      },
+    },
+    '/reportes/{id}/eliminar-publicacion': {
+      patch: {
+        tags: ['Administración'],
+        summary: 'Eliminar la publicación reportada y cerrar sus reportes pendientes (solo admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Publicación eliminada' }, 409: { description: 'Ya resuelto' } },
+      },
+    },
+    '/admin/usuarios': {
+      get: {
+        tags: ['Administración'],
+        summary: 'Listar usuarios registrados con su calificación (solo admin)',
+        security: [{ bearerAuth: [] }],
+        responses: { 200: { description: 'Usuarios' } },
+      },
+    },
+    '/admin/usuarios/{id}': {
+      get: {
+        tags: ['Administración'],
+        summary: 'Perfil de un usuario con sus publicaciones (solo admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Usuario' }, 404: { description: 'No encontrado' } },
+      },
+    },
+    '/admin/usuarios/{id}/suspension': {
+      patch: {
+        tags: ['Administración'],
+        summary: 'Suspender o reactivar una cuenta (solo admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { suspendido: { type: 'boolean' } } } } } },
+        responses: { 200: { description: 'Usuario actualizado' } },
+      },
+    },
+    '/admin/donaciones': {
+      get: {
+        tags: ['Administración'],
+        summary: 'Historial de donaciones completadas (solo admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'desde', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'hasta', in: 'query', schema: { type: 'string', format: 'date' } },
+        ],
+        responses: { 200: { description: 'Donaciones' } },
+      },
+    },
+    '/admin/publicaciones/{id}/caducidad': {
+      patch: {
+        tags: ['Administración'],
+        summary: 'Definir en cuántos días vence una publicación (solo admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { diasRestantes: { type: 'integer', minimum: 1, maximum: 365 } } } } } },
+        responses: { 200: { description: 'Publicación actualizada' }, 400: { description: 'Días inválidos' } },
+      },
+    },
+    '/admin/publicaciones/{id}': {
+      delete: {
+        tags: ['Administración'],
+        summary: 'Eliminar una publicación y cerrar sus reportes pendientes (solo admin)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 204: { description: 'Eliminada' } },
+      },
+    },
+    '/notificaciones': {
       get: {
         tags: ['Solicitudes'],
-        summary: 'Listar solicitudes',
+        summary: 'Notificaciones del usuario autenticado (solicitudes recibidas, caducidad y respuestas)',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Lista de notificaciones del usuario' },
+          401: { description: 'No autenticado' },
+        },
+      },
+    },
+    '/solicitudes/mias': {
+      get: {
+        tags: ['Solicitudes'],
+        summary: 'Listar solicitudes, favoritos y estados del usuario autenticado',
+        security: [{ bearerAuth: [] }],
         responses: {
           200: {
             content: {
               'application/json': {
-                schema: { type: 'array', items: { $ref: '#/components/schemas/Solicitud' } },
+                schema: {
+                  type: 'object',
+                  properties: {
+                    enviadas: { type: 'array', items: { $ref: '#/components/schemas/Solicitud' } },
+                    recibidas: { type: 'array', items: { $ref: '#/components/schemas/Solicitud' } },
+                    historial: { type: 'array', items: { $ref: '#/components/schemas/Solicitud' } },
+                    favoritos: { type: 'integer' },
+                  },
+                },
               },
             },
           },
         },
       },
+    },
+    '/solicitudes': {
       post: {
         tags: ['Solicitudes'],
         summary: 'Crear solicitud',
+        security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
@@ -415,6 +603,7 @@ module.exports = {
       get: {
         tags: ['Solicitudes'],
         summary: 'Obtener solicitud por ID',
+        security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         responses: {
           200: { description: 'Detalle de la solicitud' },
@@ -423,7 +612,8 @@ module.exports = {
       },
       patch: {
         tags: ['Solicitudes'],
-        summary: 'Actualizar solicitud (estado, favorito)',
+        summary: 'Actualizar el estado de una solicitud propia o recibida',
+        security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         requestBody: {
           content: {
@@ -431,8 +621,7 @@ module.exports = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', enum: ['Pendiente', 'Aceptado', 'Donado', 'Rechazado'] },
-                  esFavorito: { type: 'boolean' },
+                  status: { type: 'string', enum: ['Aceptado', 'Donado', 'Rechazado', 'Cancelado'] },
                 },
               },
             },
@@ -442,12 +631,68 @@ module.exports = {
           200: { description: 'Solicitud actualizada' },
         },
       },
+    },
+    '/solicitudes/{id}/confirmar-intercambio': {
+      post: {
+        tags: ['Solicitudes'],
+        summary: 'Confirmar un intercambio y calificar al solicitante',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['calificacion'],
+                properties: { calificacion: { type: 'integer', minimum: 1, maximum: 5 } },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Intercambio confirmado y calificación guardada' },
+        },
+      },
+    },
+    '/favoritos': {
+      get: {
+        tags: ['Solicitudes'],
+        summary: 'Listar publicaciones favoritas del usuario',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Lista de publicaciones favoritas con días restantes de vigencia' },
+        },
+      },
+      post: {
+        tags: ['Solicitudes'],
+        summary: 'Agregar una publicación a favoritos',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['articuloId'],
+                properties: { articuloId: { type: 'string' } },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: 'Publicación agregada a favoritos' },
+        },
+      },
+    },
+    '/favoritos/{articuloId}': {
       delete: {
         tags: ['Solicitudes'],
-        summary: 'Eliminar solicitud',
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        summary: 'Quitar una publicación de favoritos',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'articuloId', in: 'path', required: true, schema: { type: 'string' } }],
         responses: {
-          204: { description: 'Eliminada con éxito' },
+          204: { description: 'Publicación quitada de favoritos' },
         },
       },
     },

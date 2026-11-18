@@ -77,6 +77,16 @@ async function resetPassword(req, res, next) {
   }
 }
 
+async function cambiarContrasena(req, res, next) {
+  try {
+    const { contrasenaActual, nuevaContrasena } = req.body;
+    const respuesta = await servicio.cambiarContrasena(req.usuario.id, contrasenaActual, nuevaContrasena);
+    res.status(200).json(respuesta);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   login,
   registrar,
@@ -84,4 +94,5 @@ module.exports = {
   forgotPassword,
   verifyCode,
   resetPassword,
+  cambiarContrasena,
 };

@@ -1,94 +1,91 @@
-const Notificacion = require('../models/notificacion.models');
-const HttpError = require('../utils/HttpError');
+const Publicacion = require('../models/publicacion.models');
+const Solicitud = require('../models/solicitud.models');
+
+// Una publicación se avisa como "próxima a caducar" cuando le quedan estos días o menos
+const DIAS_AVISO_CADUCIDAD = 7;
+// Las respuestas a solicitudes enviadas se avisan durante estos días
+const DIAS_AVISO_RESPUESTA = 14;
+const MS_POR_DIA = 86_400_000;
+
+function diasTranscurridos(publicacion) {
+  const fecha = new Date(publicacion.publishedAt || publicacion.createdAt);
+  const desdeFecha = Number.isNaN(fecha.getTime())
+    ? 0
+    : Math.floor((Date.now() - fecha.getTime()) / MS_POR_DIA);
+  return Math.max(publicacion.daysElapsed || 0, desdeFecha, 0);
+}
+
+function textoSolicitudes(cantidad) {
+  return cantidad === 1 ? '1 solicitud' : `${cantidad} solicitudes`;
+}
 
 /**
- * Crea una nueva notificación asociada a un usuario específico.
+ * Arma las notificaciones del usuario a partir de sus propias publicaciones y solicitudes.
  */
-async function crearNotificacion({
-  usuarioId,
-  title,
-  message,
-  type = 'intercambio',
-  referenciaId = null,
-  link = '/publicaciones',
-}) {
-  if (!usuarioId) return null;
+async function listarDeUsuario(usuarioId) {
+  const limiteRespuestas = new Date(Date.now() - DIAS_AVISO_RESPUESTA * MS_POR_DIA);
 
-  const notificacion = new Notificacion({
-    usuarioId,
-    title,
-    message,
-    type,
-    read: false,
-    referenciaId,
-    link,
+  const [publicaciones, pendientesRecibidas, respuestas] = await Promise.all([
+    Publicacion.find({ usuarioId, status: { $in: ['Disponible', 'Reservado'] } }),
+    Solicitud.find({ destinatarioId: usuarioId, status: 'Pendiente' }, { articuloId: 1 }),
+    Solicitud.find({
+      solicitanteId: usuarioId,
+      status: { $in: ['Aceptado', 'Rechazado'] },
+      updatedAt: { $gte: limiteRespuestas },
+    }).sort({ updatedAt: -1 }),
+  ]);
+
+  const pendientesPorArticulo = new Map();
+  pendientesRecibidas.forEach(({ articuloId }) => {
+    pendientesPorArticulo.set(articuloId, (pendientesPorArticulo.get(articuloId) || 0) + 1);
   });
 
-  return await notificacion.save();
-}
+  const notificaciones = [];
 
-/**
- * Obtiene todas las notificaciones de un usuario, ordenadas de más reciente a más antigua.
- */
-async function listarPorUsuario(usuarioId) {
-  return await Notificacion.find({ usuarioId }).sort({ createdAt: -1 }).limit(50);
-}
+  publicaciones.forEach((publicacion) => {
+    const id = publicacion.id;
+    const pendientes = pendientesPorArticulo.get(id) || 0;
+    const diasRestantes = Math.max(0, (publicacion.expirationDays || 30) - diasTranscurridos(publicacion));
+    const textoCaducidad = diasRestantes === 1 ? '1 día para caducar' : `${diasRestantes} días para caducar`;
 
-/**
- * Retorna el conteo de notificaciones no leídas de un usuario.
- */
-async function contarNoLeidas(usuarioId) {
-  const count = await Notificacion.countDocuments({ usuarioId, read: false });
-  return {
-    count,
-    hasUnread: count > 0,
-  };
-}
+    if (pendientes > 0) {
+      notificaciones.push({
+        id: `solicitudes-${id}`,
+        type: 'intercambio',
+        title: publicacion.title,
+        details: [
+          textoSolicitudes(pendientes),
+          textoCaducidad,
+          publicacion.modality === 'Intercambio' ? 'Oportunidad de intercambio' : 'Oportunidad de donación',
+        ],
+        path: '/solicitudes/recibidas',
+      });
+    } else if (diasRestantes <= DIAS_AVISO_CADUCIDAD) {
+      notificaciones.push({
+        id: `caducidad-${id}`,
+        type: 'caducar',
+        title: publicacion.title,
+        details: ['Sin solicitudes', textoCaducidad, 'Oportunidad de donación a Unidona'],
+        path: '/publicaciones',
+      });
+    }
+  });
 
-/**
- * Marca una notificación puntual como leída.
- */
-async function marcarComoLeida(id, usuarioId) {
-  const notificacion = await Notificacion.findOne({ _id: id, usuarioId });
-  if (!notificacion) {
-    throw new HttpError(404, 'Notificación no encontrada');
-  }
+  respuestas.forEach((solicitud) => {
+    notificaciones.push({
+      id: `respuesta-${solicitud.id}`,
+      type: 'respuesta',
+      title: solicitud.title,
+      details: [
+        solicitud.status === 'Aceptado' ? 'Tu solicitud fue aceptada' : 'Tu solicitud fue rechazada',
+      ],
+      path: '/solicitudes',
+    });
+  });
 
-  notificacion.read = true;
-  return await notificacion.save();
-}
-
-/**
- * Marca todas las notificaciones no leídas de un usuario como leídas.
- */
-async function marcarTodasComoLeidas(usuarioId) {
-  const res = await Notificacion.updateMany(
-    { usuarioId, read: false },
-    { $set: { read: true } }
-  );
-
-  return {
-    mensaje: 'Todas las notificaciones fueron marcadas como leídas',
-    modificados: res.modifiedCount,
-  };
-}
-
-/**
- * Elimina una notificación de un usuario.
- */
-async function eliminarNotificacion(id, usuarioId) {
-  const notificacion = await Notificacion.findOneAndDelete({ _id: id, usuarioId });
-  if (!notificacion) {
-    throw new HttpError(404, 'Notificación no encontrada');
-  }
-  return notificacion;
+  return notificaciones;
 }
 
 module.exports = {
-  crearNotificacion,
-  listarPorUsuario,
-  contarNoLeidas,
-  marcarComoLeida,
-  marcarTodasComoLeidas,
-  eliminarNotificacion,
+  listarDeUsuario,
 };

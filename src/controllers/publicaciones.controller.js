@@ -9,9 +9,9 @@ async function listar(req, res, next) {
   }
 }
 
-async function listarMias(req, res, next) {
+async function listarMisPublicaciones(req, res, next) {
   try {
-    const publicaciones = await servicio.listarPorUsuario(req.usuario._id);
+    const publicaciones = await servicio.listarDeUsuario(req.usuario.id);
     res.status(200).json(publicaciones);
   } catch (error) {
     next(error);
@@ -56,7 +56,7 @@ async function eliminar(req, res, next) {
 
 module.exports = {
   listar,
-  listarMias,
+  listarMisPublicaciones,
   obtener,
   crear,
   actualizar,

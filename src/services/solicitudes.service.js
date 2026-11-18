@@ -1,234 +1,151 @@
 const Solicitud = require('../models/solicitud.models');
 const Publicacion = require('../models/publicacion.models');
-const notificacionesService = require('./notificaciones.service');
+const Usuario = require('../models/usuario.models');
+const Favorito = require('../models/favorito.models');
 const HttpError = require('../utils/HttpError');
 
-async function listar(filtros = {}, usuario = null) {
-  const query = {};
+const ESTADOS_EN_CURSO = ['Pendiente', 'Aceptado'];
+const ESTADOS_HISTORIAL = ['Donado', 'Rechazado', 'Cancelado'];
 
-  if (filtros.status) {
-    query.status = filtros.status;
-  }
+async function listarDeUsuario(usuarioId) {
+  const [enviadas, recibidas, historial, favoritos] = await Promise.all([
+    Solicitud.find({ solicitanteId: usuarioId, status: { $in: ESTADOS_EN_CURSO } }).sort({ createdAt: -1 }),
+    Solicitud.find({ destinatarioId: usuarioId, status: { $in: ESTADOS_EN_CURSO } }).sort({ createdAt: -1 }),
+    Solicitud.find({
+      $or: [{ solicitanteId: usuarioId }, { destinatarioId: usuarioId }],
+      status: { $in: ESTADOS_HISTORIAL },
+    }).sort({ createdAt: -1 }),
+    Favorito.countDocuments({ usuarioId }),
+  ]);
 
-  if (filtros.type || filtros.tipo) {
-    const t = filtros.type || filtros.tipo;
-    query.type = new RegExp(t, 'i');
-  }
-
-  if (filtros.esFavorito !== undefined || filtros.isFavorite !== undefined) {
-    const fav = filtros.esFavorito !== undefined ? filtros.esFavorito : filtros.isFavorite;
-    query.esFavorito = fav === 'true' || fav === true;
-  }
-
-  if (filtros.recibidas && usuario) {
-    query.$or = [{ propietarioId: usuario._id || usuario.id }, { propietarioId: null }];
-  } else if (filtros.enviadas && usuario) {
-    query.solicitanteId = usuario._id || usuario.id;
-  }
-
-  return await Solicitud.find(query).sort({ createdAt: -1 });
+  return { enviadas, recibidas, historial, favoritos };
 }
 
-async function obtener(id) {
+async function obtener(id, usuarioId) {
   const solicitud = await Solicitud.findById(id);
-  if (!solicitud) {
-    throw new HttpError(404, 'Solicitud no encontrada');
+  if (!solicitud) throw new HttpError(404, 'Solicitud no encontrada');
+
+  if (![solicitud.solicitanteId, solicitud.destinatarioId].some((idUsuario) => String(idUsuario) === String(usuarioId))) {
+    throw new HttpError(403, 'No tienes permiso para ver esta solicitud');
   }
+
   return solicitud;
 }
 
-async function crear(datos, usuario = null) {
-  const payload = { ...datos };
-
-  if (usuario) {
-    payload.author = usuario.nombre || payload.author;
-    payload.solicitanteId = usuario._id || usuario.id;
+async function crear(datos, usuario) {
+  const articulo = await Publicacion.findById(datos.articuloId);
+  if (!articulo) throw new HttpError(404, 'El artículo solicitado no existe');
+  if (String(articulo.usuarioId) === String(usuario.id)) {
+    throw new HttpError(400, 'No puedes solicitar tu propia publicación');
+  }
+  if (!articulo.usuarioId) {
+    throw new HttpError(400, 'Esta publicación no está asociada a una cuenta y no puede recibir solicitudes');
+  }
+  if (articulo.status !== 'Disponible') {
+    throw new HttpError(409, 'Esta publicación ya no está disponible');
   }
 
-  // Buscar publicación asociada si se suministra articuloId o por coincidencia de título
-  let publicacionAsociada = null;
-  if (payload.articuloId) {
-    try {
-      publicacionAsociada = await Publicacion.findById(payload.articuloId);
-    } catch {
-      // Ignorar error de casting de id
-    }
-  }
-
-  if (!publicacionAsociada && payload.title) {
-    const baseTitle = payload.title.split('·')[0].trim();
-    publicacionAsociada = await Publicacion.findOne({
-      title: new RegExp(`^${baseTitle}`, 'i'),
+  if (datos.articuloOfrecidoId) {
+    const articuloOfrecido = await Publicacion.findOne({
+      _id: datos.articuloOfrecidoId,
+      usuarioId: usuario.id,
+      status: 'Disponible',
     });
-  }
-
-  if (publicacionAsociada) {
-    payload.articuloId = publicacionAsociada._id.toString();
-    payload.propietarioId = publicacionAsociada.usuarioId;
-
-    // Incrementar contador de solicitudes del artículo
-    publicacionAsociada.requests = (publicacionAsociada.requests || 0) + 1;
-    await publicacionAsociada.save();
-
-    // Notificar al propietario del artículo
-    if (publicacionAsociada.usuarioId) {
-      const tipoNormalizado = payload.type && payload.type.toUpperCase().includes('INTER') ? 'intercambio' : 'donacion';
-      const tituloNotif = tipoNormalizado === 'intercambio'
-        ? `Propuesta de intercambio para "${publicacionAsociada.title}"`
-        : `Solicitud de donación para "${publicacionAsociada.title}"`;
-
-      await notificacionesService.crearNotificacion({
-        usuarioId: publicacionAsociada.usuarioId,
-        title: tituloNotif,
-        message: `${payload.author} está interesado en tu artículo "${publicacionAsociada.title}": "${payload.message}"`,
-        type: tipoNormalizado,
-        referenciaId: publicacionAsociada.id,
-        link: '/solicitudes/recibidas',
-      });
+    if (!articuloOfrecido) {
+      throw new HttpError(400, 'El artículo ofrecido no es una publicación disponible tuya');
     }
   }
 
-  const nueva = new Solicitud(payload);
-  return await nueva.save();
+  const solicitudPendiente = await Solicitud.findOne({
+    solicitanteId: usuario.id,
+    articuloId: articulo.id,
+    status: { $in: ESTADOS_EN_CURSO },
+  });
+  if (solicitudPendiente) {
+    throw new HttpError(409, 'Ya tienes una solicitud pendiente para este artículo');
+  }
+
+  const nueva = new Solicitud({
+    ...datos,
+    title: articulo.title,
+    author: usuario.nombre,
+    solicitanteId: usuario.id,
+    destinatarioId: articulo.usuarioId,
+    articuloId: articulo.id,
+  });
+
+  const solicitudGuardada = await nueva.save();
+  await Publicacion.updateOne({ _id: articulo.id }, { $inc: { requests: 1 } });
+  return solicitudGuardada;
 }
 
-async function actualizar(id, cambios, usuario = null) {
+async function actualizarEstado(id, status, usuarioId) {
   const solicitud = await Solicitud.findById(id);
-  if (!solicitud) {
-    throw new HttpError(404, 'Solicitud no encontrada');
-  }
+  if (!solicitud) throw new HttpError(404, 'Solicitud no encontrada');
 
+  const esSolicitante = String(solicitud.solicitanteId) === String(usuarioId);
+  const esDestinatario = String(solicitud.destinatarioId) === String(usuarioId);
   const estadoAnterior = solicitud.status;
-  Object.assign(solicitud, cambios);
-  const actualizada = await solicitud.save();
+  const puedeCancelar = esSolicitante && status === 'Cancelado' && estadoAnterior === 'Pendiente';
+  const puedeResponder = esDestinatario &&
+    estadoAnterior === 'Pendiente' &&
+    ['Aceptado', 'Rechazado'].includes(status);
+  const puedeCompletar = esDestinatario && estadoAnterior === 'Aceptado' && status === 'Donado';
 
-  // 1. Si la solicitud pasa a 'Aceptado' (Intercambio exitoso)
-  if (cambios.status === 'Aceptado' && estadoAnterior !== 'Aceptado') {
-    if (solicitud.solicitanteId) {
-      await notificacionesService.crearNotificacion({
-        usuarioId: solicitud.solicitanteId,
-        title: '¡Intercambio Aceptado!',
-        message: `¡Tu solicitud para el artículo "${solicitud.title}" ha sido aceptada exitosamente!`,
-        type: 'intercambio',
-        referenciaId: solicitud.id,
-        link: '/solicitudes/enviadas',
-      });
-    }
-
-    if (solicitud.articuloId) {
-      try {
-        const pub = await Publicacion.findById(solicitud.articuloId);
-        if (pub) {
-          pub.status = solicitud.type && solicitud.type.toUpperCase().includes('INTER') ? 'Reservado' : 'Donado';
-          await pub.save();
-        }
-      } catch {
-        // En caso de que el ID no sea de mongoose
-      }
-    }
+  if (!puedeCancelar && !puedeResponder && !puedeCompletar) {
+    throw new HttpError(409, 'La solicitud no puede cambiar a ese estado');
   }
 
-  // 2. Si la solicitud pasa a 'Rechazado'
-  if (cambios.status === 'Rechazado' && estadoAnterior !== 'Rechazado') {
-    if (solicitud.solicitanteId) {
-      await notificacionesService.crearNotificacion({
-        usuarioId: solicitud.solicitanteId,
-        title: 'Solicitud no aceptada',
-        message: `Tu solicitud para "${solicitud.title}" no fue aceptada en esta ocasión.`,
-        type: 'intercambio',
-        referenciaId: solicitud.id,
-        link: '/solicitudes/enviadas',
-      });
-    }
+  const actualizada = await Solicitud.findOneAndUpdate(
+    { _id: id, status: estadoAnterior },
+    { $set: { status } },
+    { new: true, runValidators: true }
+  );
+  if (!actualizada) throw new HttpError(409, 'La solicitud ya fue actualizada');
+  return actualizada;
+}
+
+async function confirmarIntercambio(id, calificacion, usuarioId) {
+  if (!Number.isInteger(calificacion) || calificacion < 1 || calificacion > 5) {
+    throw new HttpError(400, 'La calificación debe ser un número entero entre 1 y 5');
   }
 
-  // 3. Si se marca como 'Donado'
-  if (cambios.status === 'Donado' && estadoAnterior !== 'Donado') {
-    const destinoId = solicitud.propietarioId || (usuario ? (usuario._id || usuario.id) : null);
-    if (destinoId) {
-      await notificacionesService.crearNotificacion({
-        usuarioId: destinoId,
-        title: 'Artículo donado a Unidona',
-        message: `El artículo "${solicitud.title}" ha sido registrado formalmente como donado a Unidona.`,
-        type: 'donacion',
-        referenciaId: solicitud.id,
-        link: '/publicaciones',
-      });
-    }
+  const solicitud = await Solicitud.findById(id);
+  if (!solicitud) throw new HttpError(404, 'Solicitud no encontrada');
+  if (String(solicitud.destinatarioId) !== String(usuarioId)) {
+    throw new HttpError(403, 'Solo quien recibió la solicitud puede confirmar el intercambio');
   }
+  if (solicitud.type !== 'INTERCAMBIO' || solicitud.status !== 'Pendiente') {
+    throw new HttpError(409, 'Este intercambio ya no se puede confirmar');
+  }
+  const solicitante = await Usuario.findById(solicitud.solicitanteId);
+  if (!solicitante) throw new HttpError(404, 'El usuario solicitante ya no existe');
+
+  const actualizada = await Solicitud.findOneAndUpdate(
+    {
+      _id: id,
+      destinatarioId: usuarioId,
+      type: 'INTERCAMBIO',
+      status: 'Pendiente',
+    },
+    { $set: { status: 'Donado', calificacion } },
+    { new: true, runValidators: true }
+  );
+  if (!actualizada) throw new HttpError(409, 'Este intercambio ya no se puede confirmar');
+
+  const cantidadCalificaciones = solicitante.ratingCount || 0;
+  solicitante.rating =
+    (solicitante.rating * cantidadCalificaciones + calificacion) / (cantidadCalificaciones + 1);
+  solicitante.ratingCount = cantidadCalificaciones + 1;
+  await solicitante.save();
 
   return actualizada;
 }
 
-async function eliminar(id) {
-  const eliminada = await Solicitud.findByIdAndDelete(id);
-  if (!eliminada) {
-    throw new HttpError(404, 'Solicitud no encontrada');
-  }
-  return eliminada;
-}
-
-async function sembrarSolicitudesIniciales() {
-  try {
-    const conteo = await Solicitud.countDocuments();
-    if (conteo === 0) {
-      console.log('Sembrando solicitudes iniciales en MongoDB...');
-      const solicitudesDemo = [
-        {
-          type: 'INTERCAMBIO',
-          author: 'Camila Rojas',
-          title: 'Chaqueta de Jean Oversize · Talla M',
-          message: 'Hola, tengo una chaqueta impermeable negra talla M en perfecto estado para intercambiar.',
-          date: 'Hace 2 días',
-          status: 'Pendiente',
-          esFavorito: true,
-          daysRemaining: 4,
-        },
-        {
-          type: 'DONACIÓN',
-          author: 'Mateo Vargas',
-          title: 'Camiseta Básica Algodón Orgánico · Talla S',
-          message: 'Me interesa para la jornada de donación universitaria de esta semana en Chapinero.',
-          date: 'Hace 5 días',
-          status: 'Aceptado',
-          esFavorito: true,
-          daysRemaining: 12,
-        },
-        {
-          type: 'INTERCAMBIO',
-          author: 'Valentina Gómez',
-          title: 'Pantalón Cargo Beige · Talla 30',
-          message: 'Puedo acercarme a la estación de TransMilenio más cercana para hacer el cambio.',
-          date: '12 Oct 2026',
-          status: 'Rechazado',
-          esFavorito: false,
-          daysRemaining: 0,
-        },
-        {
-          type: 'DONACIÓN',
-          author: 'Fundación Unidona',
-          title: 'Buso Tejido Lana Gris · Talla L',
-          message: 'Recibido exitosamente en el punto de recolección del Banco de Ropa Unidona.',
-          date: '08 Oct 2026',
-          status: 'Donado',
-          esFavorito: false,
-          daysRemaining: 0,
-        },
-      ];
-
-      await Solicitud.insertMany(solicitudesDemo);
-      console.log('✔ 4 solicitudes demo sembradas con éxito en MongoDB.');
-    }
-  } catch (error) {
-    console.error('Error al sembrar solicitudes:', error.message);
-  }
-}
-
 module.exports = {
-  listar,
+  listarDeUsuario,
   obtener,
   crear,
-  actualizar,
-  eliminar,
-  sembrarSolicitudesIniciales,
+  actualizarEstado,
+  confirmarIntercambio,
 };

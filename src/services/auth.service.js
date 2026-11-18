@@ -4,6 +4,13 @@ const HttpError = require('../utils/HttpError');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'eco_golgi_jwt_super_secret_key_2026_secureroles';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+const MAX_INTENTOS = 3;
+const MINUTOS_BLOQUEO = 15;
+const MENSAJE_BLOQUEO = `Demasiados intentos fallidos. Tu cuenta está bloqueada por ${MINUTOS_BLOQUEO} minutos; intenta más tarde o restablece tu contraseña.`;
+
+function calificacionDel(usuario) {
+  return usuario.ratingCount > 0 ? usuario.rating : 0;
+}
 
 /**
  * Autentica un usuario verificando credenciales, estado de bloqueo y emite un token JWT real.
@@ -15,18 +22,30 @@ async function login({ correo, contrasena }) {
     throw new HttpError(401, 'Credenciales incorrectas');
   }
 
+  if (usuario.suspendido) {
+    throw new HttpError(403, 'Tu cuenta fue suspendida por un administrador');
+  }
+
+  // Verificar si la cuenta se encuentra bloqueada por intentos fallidos
+  if (usuario.estaBloqueado()) {
+    throw new HttpError(403, MENSAJE_BLOQUEO);
+  }
   if (usuario.bloqueado) {
-    throw new HttpError(403, 'Demasiados intentos, intenta más tarde');
+    // El bloqueo ya venció: se reinicia el contador
+    usuario.bloqueado = false;
+    usuario.bloqueadoHasta = null;
+    usuario.intentosFallidos = 0;
   }
 
   const esValida = await usuario.compararContrasena(contrasena);
 
   if (!esValida) {
     usuario.intentosFallidos = (usuario.intentosFallidos || 0) + 1;
-    if (usuario.intentosFallidos >= 3) {
+    if (usuario.intentosFallidos >= MAX_INTENTOS) {
       usuario.bloqueado = true;
+      usuario.bloqueadoHasta = new Date(Date.now() + MINUTOS_BLOQUEO * 60_000);
       await usuario.save();
-      throw new HttpError(403, 'Demasiados intentos, intenta más tarde');
+      throw new HttpError(403, MENSAJE_BLOQUEO);
     }
     await usuario.save();
     throw new HttpError(401, 'Credenciales incorrectas');
@@ -34,6 +53,7 @@ async function login({ correo, contrasena }) {
 
   usuario.intentosFallidos = 0;
   usuario.bloqueado = false;
+  usuario.bloqueadoHasta = null;
   await usuario.save();
 
   const rolNormalizado =
@@ -60,7 +80,7 @@ async function login({ correo, contrasena }) {
       correo: usuario.correo,
       role: rolNormalizado,
       phone: usuario.phone,
-      rating: usuario.rating,
+      rating: calificacionDel(usuario),
       avatarUrl: usuario.avatarUrl,
     },
   };
@@ -83,7 +103,8 @@ async function registrar({ nombre, correo, contrasena, phone }) {
     contrasena,
     phone: phone ? String(phone).trim() : '',
     role: 'user',
-    rating: 5,
+    rating: 0,
+    ratingCount: 0,
   });
 
   await nuevoUsuario.save();
@@ -107,7 +128,7 @@ async function registrar({ nombre, correo, contrasena, phone }) {
       correo: nuevoUsuario.correo,
       role: 'user',
       phone: nuevoUsuario.phone,
-      rating: nuevoUsuario.rating,
+      rating: calificacionDel(nuevoUsuario),
     },
   };
 }
@@ -132,7 +153,7 @@ async function obtenerPerfil(usuarioId) {
     correo: usuario.correo,
     role: rolNormalizado,
     phone: usuario.phone,
-    rating: usuario.rating,
+    rating: calificacionDel(usuario),
     avatarUrl: usuario.avatarUrl,
   };
 }
@@ -190,6 +211,7 @@ async function restablecerContrasena(correo, pin, nuevaContrasena) {
   usuario.contrasena = nuevaContrasena;
   usuario.pinRecuperacion = null;
   usuario.bloqueado = false;
+  usuario.bloqueadoHasta = null;
   usuario.intentosFallidos = 0;
   await usuario.save();
 
@@ -199,9 +221,32 @@ async function restablecerContrasena(correo, pin, nuevaContrasena) {
 }
 
 /**
+ * Cambia la contraseña de un usuario autenticado verificando primero la actual.
+ */
+async function cambiarContrasena(usuarioId, contrasenaActual, nuevaContrasena) {
+  const usuario = await Usuario.findById(usuarioId);
+  if (!usuario) {
+    throw new HttpError(404, 'Usuario no encontrado');
+  }
+
+  const esValida = await usuario.compararContrasena(contrasenaActual);
+  if (!esValida) {
+    throw new HttpError(400, 'La contraseña actual no es correcta');
+  }
+
+  // El hook pre-save la hashea con bcrypt
+  usuario.contrasena = nuevaContrasena;
+  await usuario.save();
+
+  return {
+    mensaje: 'Contraseña actualizada correctamente',
+  };
+}
+
+/**
  * Semillero inicial de usuarios en MongoDB Atlas:
- * 1. Administrador: admin@ecogolgi.com / Admin123* (role: 'admin')
- * 2. Usuario normal: juanelpro2005@gmail.com / 123456 (role: 'user')
+ * 1. Crea el Administrador: admin@ecogolgi.com / Admin123 (role: 'admin')
+ * 2. Crea el Usuario normal: juanelpro2005@gmail.com / 123456 (role: 'user')
  */
 async function sembrarUsuariosIniciales() {
   try {
@@ -211,16 +256,20 @@ async function sembrarUsuariosIniciales() {
       await Usuario.create({
         nombre: 'Administrador Eco-Golgi',
         correo: 'admin@ecogolgi.com',
-        contrasena: 'Admin123*',
+        contrasena: 'Admin123',
         role: 'admin',
         phone: '+57 300 000 0000',
-        rating: 5,
+        rating: 0,
+        ratingCount: 0,
         avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
       });
-      console.log('✔ Administrador creado: admin@ecogolgi.com / Admin123* (Rol: admin)');
-    } else if (adminExiste.role !== 'admin') {
-      adminExiste.role = 'admin';
-      await adminExiste.save();
+      console.log(' Administrador creado: admin@ecogolgi.com / Admin123 (Rol: admin)');
+    } else {
+      // Si existía con rol descriptivo, aseguramos rol admin
+      if (adminExiste.role !== 'admin') {
+        adminExiste.role = 'admin';
+        await adminExiste.save();
+      }
     }
 
     const userExiste = await Usuario.findOne({ correo: 'juanelpro2005@gmail.com' });
@@ -232,7 +281,8 @@ async function sembrarUsuariosIniciales() {
         contrasena: '123456',
         role: 'user',
         phone: '+57 300 123 4567',
-        rating: 5,
+        rating: 0,
+        ratingCount: 0,
         avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
       });
       console.log('✔ Usuario normal creado: juanelpro2005@gmail.com / 123456 (Rol: user)');
@@ -252,6 +302,7 @@ module.exports = {
   solicitarRecuperacion,
   verificarCodigo,
   restablecerContrasena,
+  cambiarContrasena,
   sembrarUsuarioInicial: sembrarUsuariosIniciales,
   sembrarUsuariosIniciales,
 };

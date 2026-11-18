@@ -34,7 +34,11 @@ const usuarioSchema = new mongoose.Schema(
     },
     rating: {
       type: Number,
-      default: 5,
+      default: 0,
+    },
+    ratingCount: {
+      type: Number,
+      default: 0,
     },
     avatarUrl: {
       type: String,
@@ -47,6 +51,21 @@ const usuarioSchema = new mongoose.Schema(
     bloqueado: {
       type: Boolean,
       default: false,
+    },
+    // Fin del bloqueo temporal por intentos fallidos
+    bloqueadoHasta: {
+      type: Date,
+      default: null,
+    },
+    // Suspensión manual hecha por un administrador (distinto de `bloqueado`,
+    // que es el bloqueo automático por intentos fallidos de inicio de sesión).
+    suspendido: {
+      type: Boolean,
+      default: false,
+    },
+    suspendidoEn: {
+      type: Date,
+      default: null,
     },
     pinRecuperacion: {
       type: String,
@@ -97,6 +116,13 @@ usuarioSchema.methods.compararContrasena = async function (candidata) {
   return false;
 };
 
+// El bloqueo por intentos fallidos es temporal: vence en `bloqueadoHasta`.
+// Los bloqueos antiguos sin fecha se consideran vencidos.
+usuarioSchema.methods.estaBloqueado = function () {
+  return Boolean(this.bloqueado && this.bloqueadoHasta && this.bloqueadoHasta > new Date());
+};
+
+// Método de conveniencia para verificar si es administrador
 usuarioSchema.methods.esAdmin = function () {
   return this.role === 'admin' || this.role === 'Administrador';
 };

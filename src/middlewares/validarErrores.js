@@ -13,6 +13,7 @@ function validarCreacionPublicacion(req, res, next) {
   const author = req.usuario?.nombre || body.author || body.autor || 'Juan José Perez Cespedes';
   const usuarioId = req.usuario?._id || req.usuario?.id || body.usuarioId || null;
   const imageUrl = body.imageUrl || body.imagenUrl || body.imagen;
+  const images = body.images;
   const talla = body.talla || '';
   const genero = body.genero || '';
   const clima = body.clima || '';
@@ -23,6 +24,9 @@ function validarCreacionPublicacion(req, res, next) {
   // Validación de título
   if (!title || typeof title !== 'string' || title.trim().length < 3) {
     throw new HttpError(400, 'El título es obligatorio y debe tener al menos 3 caracteres');
+  }
+  if (images !== undefined && !Array.isArray(images)) {
+    throw new HttpError(400, 'Las imágenes deben enviarse como una lista');
   }
 
   // Normalización hacia el esquema de Mongoose
@@ -36,6 +40,7 @@ function validarCreacionPublicacion(req, res, next) {
     author: author.trim(),
     usuarioId,
     imageUrl: imageUrl && typeof imageUrl === 'string' && imageUrl.trim().length > 0 ? imageUrl.trim() : undefined,
+    images,
     talla: talla.trim(),
     genero: genero.trim(),
     clima: clima.trim(),
@@ -129,6 +134,17 @@ function validarCambioPublicacion(req, res, next) {
   next();
 }
 
+// Reglas de contraseña segura compartidas por el registro y el cambio de contraseña
+function mensajeContrasenaInsegura(contrasena) {
+  if (!contrasena || typeof contrasena !== 'string') return 'La contraseña es obligatoria';
+  if (contrasena.length < 5) return 'La contraseña debe tener como mínimo 5 caracteres';
+  if (!/[A-Z]/.test(contrasena)) return 'La contraseña debe contener al menos una letra mayúscula';
+  if (!/[a-z]/.test(contrasena)) return 'La contraseña debe contener al menos una letra minúscula';
+  if (!/[0-9]/.test(contrasena)) return 'La contraseña debe contener al menos un número';
+  if (!/[^A-Za-z0-9]/.test(contrasena)) return 'La contraseña debe contener al menos un carácter especial';
+  return null;
+}
+
 function validarRegistro(req, res, next) {
   const { nombre, correo, contrasena, phone } = req.body ?? {};
 
@@ -140,28 +156,9 @@ function validarRegistro(req, res, next) {
     throw new HttpError(400, 'El correo electrónico no es válido');
   }
 
-  if (!contrasena || typeof contrasena !== 'string') {
-    throw new HttpError(400, 'La contraseña es obligatoria');
-  }
-
-  if (contrasena.length < 5) {
-    throw new HttpError(400, 'La contraseña debe tener como mínimo 5 caracteres');
-  }
-
-  if (!/[A-Z]/.test(contrasena)) {
-    throw new HttpError(400, 'La contraseña debe contener al menos una letra mayúscula');
-  }
-
-  if (!/[a-z]/.test(contrasena)) {
-    throw new HttpError(400, 'La contraseña debe contener al menos una letra minúscula');
-  }
-
-  if (!/[0-9]/.test(contrasena)) {
-    throw new HttpError(400, 'La contraseña debe contener al menos un número');
-  }
-
-  if (!/[^A-Za-z0-9]/.test(contrasena)) {
-    throw new HttpError(400, 'La contraseña debe contener al menos un carácter especial');
+  const errorContrasena = mensajeContrasenaInsegura(contrasena);
+  if (errorContrasena) {
+    throw new HttpError(400, errorContrasena);
   }
 
   req.body.nombre = nombre.trim();
@@ -183,12 +180,33 @@ function validarLogin(req, res, next) {
   next();
 }
 
+function validarCambioContrasena(req, res, next) {
+  const { contrasenaActual, nuevaContrasena } = req.body ?? {};
+
+  if (!contrasenaActual || typeof contrasenaActual !== 'string') {
+    throw new HttpError(400, 'Debes ingresar tu contraseña actual');
+  }
+
+  const errorContrasena = mensajeContrasenaInsegura(nuevaContrasena);
+  if (errorContrasena) {
+    throw new HttpError(400, errorContrasena);
+  }
+
+  if (contrasenaActual === nuevaContrasena) {
+    throw new HttpError(400, 'La nueva contraseña debe ser diferente a la actual');
+  }
+
+  next();
+}
+
 function validarCreacionSolicitud(req, res, next) {
   const body = req.body ?? {};
   const title = body.title || body.titulo;
   const message = body.message || body.mensaje;
   const type = body.type || body.tipo || 'DONACIÓN';
   const author = body.author || body.autor || 'Usuario de la comunidad';
+  const articuloId = body.articuloId || body.articleId;
+  const articuloOfrecidoId = body.articuloOfrecidoId || null;
 
   if (!title || typeof title !== 'string' || title.trim().length < 3) {
     throw new HttpError(400, 'El título es obligatorio y debe tener al menos 3 caracteres');
@@ -197,15 +215,20 @@ function validarCreacionSolicitud(req, res, next) {
   if (!message || typeof message !== 'string' || message.trim().length < 3) {
     throw new HttpError(400, 'El mensaje es obligatorio y debe tener al menos 3 caracteres');
   }
+  if (!articuloId || typeof articuloId !== 'string') {
+    throw new HttpError(400, 'Debes indicar el artículo que solicitas');
+  }
+  if (String(type).toUpperCase().includes('INTER') && !articuloOfrecidoId) {
+    throw new HttpError(400, 'Debes seleccionar un artículo para ofrecer en el intercambio');
+  }
 
   req.body = {
     title: title.trim(),
     message: message.trim(),
     type: String(type).toUpperCase().includes('INTER') ? 'INTERCAMBIO' : 'DONACIÓN',
     author: author.trim(),
-    articuloId: body.articuloId || null,
-    articuloOfrecidoId: body.articuloOfrecidoId || null,
-    esFavorito: Boolean(body.esFavorito || body.isFavorite),
+    articuloId,
+    articuloOfrecidoId,
   };
 
   next();
@@ -213,31 +236,13 @@ function validarCreacionSolicitud(req, res, next) {
 
 function validarCambioSolicitud(req, res, next) {
   const body = req.body ?? {};
-  if (!body || Object.keys(body).length === 0) {
-    throw new HttpError(400, 'No se enviaron datos para actualizar');
+  const status = body.status || body.estado;
+  const permitidos = ['Aceptado', 'Donado', 'Rechazado', 'Cancelado'];
+  if (!permitidos.includes(status)) {
+    throw new HttpError(400, `El estado debe ser uno de: ${permitidos.join(', ')}`);
   }
 
-  const cambios = {};
-  if (body.status !== undefined || body.estado !== undefined) {
-    const st = body.status || body.estado;
-    const permitidos = ['Pendiente', 'Aceptado', 'Donado', 'Rechazado'];
-    if (!permitidos.includes(st)) {
-      throw new HttpError(400, `El estado debe ser uno de: ${permitidos.join(', ')}`);
-    }
-    cambios.status = st;
-  }
-
-  if (body.esFavorito !== undefined || body.isFavorite !== undefined) {
-    cambios.esFavorito = Boolean(body.esFavorito !== undefined ? body.esFavorito : body.isFavorite);
-  }
-
-  if (body.message !== undefined) cambios.message = String(body.message).trim();
-
-  if (Object.keys(cambios).length === 0) {
-    throw new HttpError(400, 'No se enviaron campos válidos para actualizar');
-  }
-
-  req.body = cambios;
+  req.body = { status };
   next();
 }
 
@@ -246,6 +251,7 @@ module.exports = {
   validarCambioPublicacion,
   validarRegistro,
   validarLogin,
+  validarCambioContrasena,
   validarCreacionSolicitud,
   validarCambioSolicitud,
 };
