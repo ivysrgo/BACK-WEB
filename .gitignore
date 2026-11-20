@@ -6,3 +6,4 @@ uploads/
 logs/
 .DS_Store
 .vscode/
+.vercel

@@ -9,16 +9,24 @@ try {
 }
 
 async function connectDB() {
+  if (mongoose.connection && mongoose.connection.readyState >= 1) {
+    return mongoose.connection;
+  }
+
   try {
     const uri = process.env.MONGO_URI;
 
     if (!uri) {
-      console.error('❌ ERROR: La variable de entorno MONGO_URI no está definida en el archivo .env.');
+      const msg = 'La variable de entorno MONGO_URI no está definida.';
+      console.error(`❌ ERROR: ${msg}`);
+      if (process.env.VERCEL) throw new Error(msg);
       process.exit(1);
     }
 
     if (uri.includes('<USUARIO>') || uri.includes('<PASSWORD>')) {
-      console.error('⚠️ ATENCIÓN: Debes reemplazar <USUARIO> y <PASSWORD> en tu archivo .env con tus credenciales de MongoDB Atlas.');
+      const msg = 'Debes reemplazar <USUARIO> y <PASSWORD> con tus credenciales de MongoDB Atlas.';
+      console.error(`⚠️ ATENCIÓN: ${msg}`);
+      if (process.env.VERCEL) throw new Error(msg);
       process.exit(1);
     }
 
@@ -34,6 +42,7 @@ async function connectDB() {
     } else if (error.message.includes('queryTxt ETIMEOUT') || error.message.includes('ENOTFOUND')) {
       console.error('👉 Tip: Revisa que hayas añadido tu dirección IP (o 0.0.0.0/0) en Network Access de MongoDB Atlas.');
     }
+    if (process.env.VERCEL) throw error;
     process.exit(1);
   }
 }

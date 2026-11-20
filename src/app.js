@@ -19,6 +19,17 @@ app.use(cors());
 app.use(express.json({ limit: '30mb' }));
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
+// Middleware para asegurar la conexión a MongoDB Atlas (compatible con Serverless / Vercel)
+app.use(async (req, res, next) => {
+  try {
+    const { connectDB } = require('./config/db');
+    await connectDB();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
 // 2. Documentación Swagger y rutas de diagnóstico
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(documentacion));
 app.get('/api/docs.json', (req, res) => res.json(documentacion));
