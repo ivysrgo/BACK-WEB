@@ -15,6 +15,8 @@ async function listar(filtros = {}) {
   // Filtro por estado (ej: 'Disponible', 'Reservado', 'Donado', 'Caducado')
   if (filtros.estado && filtros.estado !== 'Todos' && filtros.estado !== 'TODOS') {
     query.status = filtros.estado;
+  } else {
+    query.status = { $ne: 'Intercambiado' };
   }
 
   // Filtro por modalidad (ej: 'Donación', 'Intercambio')
@@ -40,7 +42,10 @@ async function listar(filtros = {}) {
 }
 
 async function listarDeUsuario(usuarioId) {
-  return await Publicacion.find({ usuarioId }).sort({ createdAt: -1 });
+  return await Publicacion.find({
+    usuarioId,
+    status: { $ne: 'Intercambiado' },
+  }).sort({ createdAt: -1 });
 }
 
 async function obtener(id) {
@@ -163,14 +168,14 @@ async function obtenerEstadisticas() {
     donacionesPublicacion,
     caducadosPublicacion,
   ] = await Promise.all([
-    Publicacion.countDocuments({ status: { $ne: 'Donado' } }),
+    Publicacion.countDocuments({ status: { $nin: ['Donado', 'Intercambiado'] } }),
     Solicitud.countDocuments({
       type: { $regex: /inter/i },
       status: { $in: ['Donado', 'Aceptado'] },
     }),
     Publicacion.countDocuments({
       modality: { $regex: /inter/i },
-      status: 'Donado',
+      status: { $in: ['Donado', 'Intercambiado'] },
     }),
     Solicitud.countDocuments({
       type: { $regex: /dona/i },

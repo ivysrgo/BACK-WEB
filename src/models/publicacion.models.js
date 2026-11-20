@@ -40,7 +40,7 @@ const publicacionSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['Disponible', 'Reservado', 'Donado', 'Caducado'],
+      enum: ['Disponible', 'Reservado', 'Donado', 'Caducado', 'Intercambiado'],
       default: 'Disponible',
     },
     daysElapsed: {

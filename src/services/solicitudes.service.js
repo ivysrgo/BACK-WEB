@@ -31,23 +31,32 @@ async function listar(filtros = {}, usuario = null) {
   }));
 }
 
-function formatearSolicitud(s, setFavoritos = new Set()) {
+function formatearSolicitud(s, setFavoritos = new Set(), usuarioId = null, pubMap = new Map()) {
   const artId = s.articuloId ? String(s.articuloId) : '';
+  const artOfrecidoId = s.articuloOfrecidoId ? String(s.articuloOfrecidoId) : '';
+  const isOwner = usuarioId ? String(s.destinatarioId) === String(usuarioId) : false;
+  const artSolicitado = pubMap.get(artId);
+  const artOfrecido = pubMap.get(artOfrecidoId);
+
   return {
     id: String(s._id),
     _id: s._id,
     type: String(s.type).toUpperCase().includes('INTER') ? 'INTERCAMBIO' : 'DONACIÓN',
-    title: s.title,
+    title: s.title || artSolicitado?.title || 'Artículo',
     author: s.author,
     message: s.message,
     date: s.date || 'Reciente',
     status: s.status,
     articuloId: artId,
-    articuloOfrecidoId: s.articuloOfrecidoId ? String(s.articuloOfrecidoId) : undefined,
+    articuloOfrecidoId: artOfrecidoId || undefined,
+    articuloOfrecidoTitle: artOfrecido?.title || undefined,
+    articuloSolicitadoTitle: artSolicitado?.title || s.title || undefined,
     solicitanteId: String(s.solicitanteId),
     destinatarioId: String(s.destinatarioId),
     calificacion: s.calificacion ?? null,
     isFavorite: Boolean(artId && setFavoritos.has(artId)),
+    isOwner,
+    donationRole: isOwner ? 'DONASTE' : 'RECIBISTE',
   };
 }
 
@@ -65,10 +74,22 @@ async function listarDeUsuario(usuarioId) {
 
   const setFavoritos = new Set((favoritosDocs || []).map((f) => String(f.articuloId)));
 
+  const allSolicitudes = [...enviadas, ...recibidas, ...historial];
+  const allArtIds = [
+    ...new Set(
+      allSolicitudes
+        .flatMap((s) => [s.articuloId, s.articuloOfrecidoId])
+        .filter(Boolean)
+    ),
+  ];
+
+  const publicaciones = await Publicacion.find({ _id: { $in: allArtIds } });
+  const pubMap = new Map(publicaciones.map((p) => [String(p._id), p]));
+
   return {
-    enviadas: enviadas.map((s) => formatearSolicitud(s, setFavoritos)),
-    recibidas: recibidas.map((s) => formatearSolicitud(s, setFavoritos)),
-    historial: historial.map((s) => formatearSolicitud(s, setFavoritos)),
+    enviadas: enviadas.map((s) => formatearSolicitud(s, setFavoritos, usuarioId, pubMap)),
+    recibidas: recibidas.map((s) => formatearSolicitud(s, setFavoritos, usuarioId, pubMap)),
+    historial: historial.map((s) => formatearSolicitud(s, setFavoritos, usuarioId, pubMap)),
     favoritos,
   };
 }
@@ -191,7 +212,10 @@ async function confirmarIntercambio(id, calificacion, usuarioId) {
   if (!actualizada) throw new HttpError(409, 'Este intercambio ya no se puede confirmar');
 
   if (solicitud.articuloId) {
-    await Publicacion.updateOne({ _id: solicitud.articuloId }, { $set: { status: 'Donado' } });
+    await Publicacion.updateOne({ _id: solicitud.articuloId }, { $set: { status: 'Intercambiado' } });
+  }
+  if (solicitud.articuloOfrecidoId) {
+    await Publicacion.updateOne({ _id: solicitud.articuloOfrecidoId }, { $set: { status: 'Intercambiado' } });
   }
 
   const cantidadCalificaciones = solicitante.ratingCount || 0;

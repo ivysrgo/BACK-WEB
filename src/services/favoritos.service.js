@@ -54,6 +54,10 @@ async function agregar(articuloId, usuarioId) {
   }
   if (!articulo) throw new HttpError(404, 'Publicación no encontrada');
 
+  if (articulo.usuarioId && String(articulo.usuarioId) === String(usuarioId)) {
+    throw new HttpError(400, 'No puedes agregar a favoritos tus propias publicaciones');
+  }
+
   await Favorito.updateOne(
     { usuarioId, articuloId: articulo.id },
     { $setOnInsert: { usuarioId, articuloId: articulo.id } },
