@@ -1,9 +1,5 @@
-const { randomUUID } = require('crypto');
-const fs = require('fs/promises');
-const path = require('path');
 const HttpError = require('./HttpError');
 
-const directorioImagenes = path.join(__dirname, '..', '..', 'uploads', 'publicaciones');
 const MAX_IMAGENES = 5;
 const MAX_BYTES_POR_IMAGEN = 5 * 1024 * 1024;
 const MAX_BYTES_TOTALES = 20 * 1024 * 1024;
@@ -33,7 +29,7 @@ function decodificarImagen(dataUrl) {
     throw new HttpError(400, 'Una imagen está vacía, excede 5 MB o no coincide con su formato');
   }
 
-  return { tipo, contenido };
+  return { tipo, contenido, dataUrl };
 }
 
 async function guardarImagenesPublicacion(images) {
@@ -47,25 +43,15 @@ async function guardarImagenesPublicacion(images) {
     throw new HttpError(400, 'El tamaño total de las imágenes no debe superar 20 MB');
   }
 
-  await fs.mkdir(directorioImagenes, { recursive: true });
-  const guardadas = [];
-
-  try {
-    for (const imagen of imagenes) {
-      const nombre = `${randomUUID()}.${imagen.tipo === 'jpeg' ? 'jpg' : 'png'}`;
-      const archivo = path.join(directorioImagenes, nombre);
-      await fs.writeFile(archivo, imagen.contenido, { flag: 'wx' });
-      guardadas.push({ archivo, url: `/uploads/publicaciones/${nombre}` });
-    }
-    return guardadas;
-  } catch (error) {
-    await eliminarImagenesPublicacion(guardadas);
-    throw error;
-  }
+  // Devolvemos el Base64 directamente en 'url' para que se guarde en MongoDB
+  return imagenes.map((imagen) => ({
+    archivo: null,
+    url: imagen.dataUrl,
+  }));
 }
 
-async function eliminarImagenesPublicacion(imagenes) {
-  await Promise.all(imagenes.map(({ archivo }) => fs.unlink(archivo)));
+async function eliminarImagenesPublicacion() {
+  // No-op: las imágenes viven en MongoDB, no en el disco del servidor
 }
 
 module.exports = {
