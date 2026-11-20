@@ -31,12 +31,23 @@ async function listar(filtros = {}, usuario = null) {
   }));
 }
 
-function formatearSolicitud(s, setFavoritos = new Set(), usuarioId = null, pubMap = new Map()) {
+function formatearSolicitud(s, setFavoritos = new Set(), usuarioId = null, pubMap = new Map(), userMap = new Map()) {
   const artId = s.articuloId ? String(s.articuloId) : '';
   const artOfrecidoId = s.articuloOfrecidoId ? String(s.articuloOfrecidoId) : '';
   const isOwner = usuarioId ? String(s.destinatarioId) === String(usuarioId) : false;
   const artSolicitado = pubMap.get(artId);
   const artOfrecido = pubMap.get(artOfrecidoId);
+
+  const solicitante = userMap.get(String(s.solicitanteId));
+  const destinatario = userMap.get(String(s.destinatarioId));
+
+  const targetUserId = isOwner ? String(s.solicitanteId) : String(s.destinatarioId);
+  const targetUserName = isOwner
+    ? (solicitante?.nombre || s.author || 'Usuario')
+    : (destinatario?.nombre || artSolicitado?.author || 'Usuario');
+  const targetUserAvatarUrl = isOwner
+    ? (solicitante?.avatarUrl || '')
+    : (destinatario?.avatarUrl || '');
 
   return {
     id: String(s._id),
@@ -53,6 +64,10 @@ function formatearSolicitud(s, setFavoritos = new Set(), usuarioId = null, pubMa
     articuloSolicitadoTitle: artSolicitado?.title || s.title || undefined,
     solicitanteId: String(s.solicitanteId),
     destinatarioId: String(s.destinatarioId),
+    targetUserId,
+    targetUserName,
+    targetUserAvatarUrl,
+    authorAvatarUrl: solicitante?.avatarUrl || '',
     calificacion: s.calificacion ?? null,
     isFavorite: Boolean(artId && setFavoritos.has(artId)),
     isOwner,
@@ -83,13 +98,27 @@ async function listarDeUsuario(usuarioId) {
     ),
   ];
 
-  const publicaciones = await Publicacion.find({ _id: { $in: allArtIds } });
+  const allUserIds = [
+    ...new Set(
+      allSolicitudes
+        .flatMap((s) => [s.solicitanteId, s.destinatarioId])
+        .filter(Boolean)
+        .map(String)
+    ),
+  ];
+
+  const [publicaciones, usuarios] = await Promise.all([
+    Publicacion.find({ _id: { $in: allArtIds } }),
+    Usuario.find({ _id: { $in: allUserIds } }, 'nombre avatarUrl'),
+  ]);
+
   const pubMap = new Map(publicaciones.map((p) => [String(p._id), p]));
+  const userMap = new Map(usuarios.map((u) => [String(u._id), u]));
 
   return {
-    enviadas: enviadas.map((s) => formatearSolicitud(s, setFavoritos, usuarioId, pubMap)),
-    recibidas: recibidas.map((s) => formatearSolicitud(s, setFavoritos, usuarioId, pubMap)),
-    historial: historial.map((s) => formatearSolicitud(s, setFavoritos, usuarioId, pubMap)),
+    enviadas: enviadas.map((s) => formatearSolicitud(s, setFavoritos, usuarioId, pubMap, userMap)),
+    recibidas: recibidas.map((s) => formatearSolicitud(s, setFavoritos, usuarioId, pubMap, userMap)),
+    historial: historial.map((s) => formatearSolicitud(s, setFavoritos, usuarioId, pubMap, userMap)),
     favoritos,
   };
 }

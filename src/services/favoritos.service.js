@@ -22,9 +22,15 @@ async function listar(usuarioId) {
   });
   const articulosPorId = new Map(articulos.map((articulo) => [String(articulo.id), articulo]));
 
+  const authorUserIds = [...new Set(articulos.map((a) => a.usuarioId).filter(Boolean).map(String))];
+  const usuarios = await Usuario.find({ _id: { $in: authorUserIds } }, 'nombre avatarUrl');
+  const userMap = new Map(usuarios.map((u) => [String(u._id), u]));
+
   return favoritos.flatMap((favorito) => {
     const articulo = articulosPorId.get(String(favorito.articuloId));
     if (!articulo) return [];
+
+    const autorDoc = articulo.usuarioId ? userMap.get(String(articulo.usuarioId)) : null;
 
     return [{
       id: articulo.id,
@@ -33,6 +39,8 @@ async function listar(usuarioId) {
       category: articulo.category,
       modality: articulo.modality,
       author: articulo.author,
+      authorId: articulo.usuarioId ? String(articulo.usuarioId) : undefined,
+      authorAvatarUrl: autorDoc?.avatarUrl || '',
       description: articulo.description,
       imageUrl: articulo.imageUrl,
       status: articulo.status,

@@ -244,6 +244,114 @@ async function cambiarContrasena(usuarioId, contrasenaActual, nuevaContrasena) {
 }
 
 /**
+ * Actualiza el perfil del usuario autenticado (nombre, correo, phone, avatarUrl).
+ */
+async function actualizarPerfil(usuarioId, { nombre, correo, phone, avatarUrl }) {
+  const usuario = await Usuario.findById(usuarioId);
+  if (!usuario) {
+    throw new HttpError(404, 'Usuario no encontrado');
+  }
+
+  if (correo !== undefined) {
+    const correoLimpio = String(correo).toLowerCase().trim();
+    if (correoLimpio && correoLimpio !== usuario.correo) {
+      const existe = await Usuario.findOne({ correo: correoLimpio, _id: { $ne: usuarioId } });
+      if (existe) {
+        throw new HttpError(409, 'El correo electrónico ya está registrado por otro usuario');
+      }
+      usuario.correo = correoLimpio;
+    }
+  }
+
+  if (nombre !== undefined && String(nombre).trim()) {
+    usuario.nombre = String(nombre).trim();
+  }
+
+  if (phone !== undefined) {
+    usuario.phone = String(phone).trim();
+  }
+
+  if (avatarUrl !== undefined) {
+    usuario.avatarUrl = String(avatarUrl).trim();
+  }
+
+  await usuario.save();
+
+  const rolNormalizado =
+    usuario.role === 'Administrador' || usuario.role === 'admin'
+      ? 'admin'
+      : 'user';
+
+  return {
+    id: usuario.id,
+    nombre: usuario.nombre,
+    correo: usuario.correo,
+    role: rolNormalizado,
+    phone: usuario.phone,
+    rating: calificacionDel(usuario),
+    avatarUrl: usuario.avatarUrl,
+  };
+}
+
+/**
+ * Obtiene el perfil público de un usuario por su ID, incluyendo sus publicaciones activas.
+ */
+async function obtenerPerfilPublico(usuarioId) {
+  const mongoose = require('mongoose');
+  if (!mongoose.Types.ObjectId.isValid(usuarioId)) {
+    throw new HttpError(404, 'Usuario no encontrado');
+  }
+
+  const usuario = await Usuario.findById(usuarioId);
+  if (!usuario) {
+    throw new HttpError(404, 'Usuario no encontrado');
+  }
+
+  const Publicacion = require('../models/publicacion.models');
+  const publicaciones = await Publicacion.find({
+    usuarioId: usuario._id,
+    status: { $ne: 'Intercambiado' },
+  }).sort({ createdAt: -1 });
+
+  const rolNormalizado =
+    usuario.role === 'Administrador' || usuario.role === 'admin'
+      ? 'admin'
+      : 'user';
+
+  return {
+    usuario: {
+      id: String(usuario._id),
+      nombre: usuario.nombre,
+      correo: usuario.correo,
+      phone: usuario.phone || '',
+      rating: calificacionDel(usuario),
+      ratingCount: usuario.ratingCount || 0,
+      avatarUrl: usuario.avatarUrl || '',
+      role: rolNormalizado,
+    },
+    publicaciones: publicaciones.map((p) => {
+      const diasPublicado = p.createdAt
+        ? Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 86_400_000)
+        : 0;
+      return {
+        id: String(p._id),
+        title: p.title,
+        category: p.category,
+        modality: p.modality,
+        description: p.description,
+        imageUrl: p.imageUrl,
+        imageUrls: p.imageUrls,
+        status: p.status,
+        condition: p.condition,
+        daysElapsed: Math.max(0, diasPublicado),
+        expirationDays: p.expirationDays || 30,
+        createdAt: p.createdAt,
+      };
+    }),
+  };
+}
+
+/**
  * Semillero inicial de usuarios en MongoDB Atlas:
  * 1. Crea el Administrador: admin@ecogolgi.com / Admin123 (role: 'admin')
  * 2. Crea el Usuario normal: juanelpro2005@gmail.com / 123456 (role: 'user')
@@ -299,6 +407,8 @@ module.exports = {
   login,
   registrar,
   obtenerPerfil,
+  actualizarPerfil,
+  obtenerPerfilPublico,
   solicitarRecuperacion,
   verificarCodigo,
   restablecerContrasena,

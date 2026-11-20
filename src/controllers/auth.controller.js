@@ -87,10 +87,32 @@ async function cambiarContrasena(req, res, next) {
   }
 }
 
+async function actualizarPerfil(req, res, next) {
+  try {
+    const { nombre, correo, phone, avatarUrl } = req.body;
+    const usuario = await servicio.actualizarPerfil(req.usuario.id, { nombre, correo, phone, avatarUrl });
+    res.status(200).json({ usuario, mensaje: 'Perfil actualizado exitosamente' });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function perfilPublico(req, res, next) {
+  try {
+    const { id } = req.params;
+    const datos = await servicio.obtenerPerfilPublico(id);
+    res.status(200).json(datos);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   login,
   registrar,
   perfil,
+  actualizarPerfil,
+  perfilPublico,
   forgotPassword,
   verifyCode,
   resetPassword,

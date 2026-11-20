@@ -37,6 +37,7 @@ function resumenUsuario(usuario) {
     phone: usuario.phone ?? '',
     rating: calificacionDel(usuario),
     ratingCount: usuario.ratingCount ?? 0,
+    avatarUrl: usuario.avatarUrl || '',
     suspendido: Boolean(usuario.suspendido),
     suspendidoEn: usuario.suspendidoEn ?? null,
     createdAt: usuario.createdAt,
