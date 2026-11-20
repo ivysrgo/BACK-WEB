@@ -1,5 +1,7 @@
+const mongoose = require('mongoose');
 const Favorito = require('../models/favorito.models');
 const Publicacion = require('../models/publicacion.models');
+const Solicitud = require('../models/solicitud.models');
 const HttpError = require('../utils/HttpError');
 
 const MILISEGUNDOS_POR_DIA = 86_400_000;
@@ -40,7 +42,16 @@ async function listar(usuarioId) {
 }
 
 async function agregar(articuloId, usuarioId) {
-  const articulo = await Publicacion.findById(articuloId);
+  let articulo = null;
+  if (mongoose.Types.ObjectId.isValid(articuloId)) {
+    articulo = await Publicacion.findById(articuloId);
+    if (!articulo) {
+      const solicitud = await Solicitud.findById(articuloId);
+      if (solicitud && solicitud.articuloId) {
+        articulo = await Publicacion.findById(solicitud.articuloId);
+      }
+    }
+  }
   if (!articulo) throw new HttpError(404, 'Publicación no encontrada');
 
   await Favorito.updateOne(
@@ -52,7 +63,17 @@ async function agregar(articuloId, usuarioId) {
 }
 
 async function eliminar(articuloId, usuarioId) {
-  await Favorito.deleteOne({ usuarioId, articuloId });
+  let idAlterno = articuloId;
+  if (mongoose.Types.ObjectId.isValid(articuloId)) {
+    const solicitud = await Solicitud.findById(articuloId);
+    if (solicitud && solicitud.articuloId) {
+      idAlterno = String(solicitud.articuloId);
+    }
+  }
+  await Favorito.deleteMany({
+    usuarioId,
+    articuloId: { $in: [articuloId, idAlterno] },
+  });
 }
 
 module.exports = {

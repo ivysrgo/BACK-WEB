@@ -31,7 +31,8 @@ async function listar(filtros = {}, usuario = null) {
   }));
 }
 
-function formatearSolicitud(s) {
+function formatearSolicitud(s, setFavoritos = new Set()) {
+  const artId = s.articuloId ? String(s.articuloId) : '';
   return {
     id: String(s._id),
     _id: s._id,
@@ -41,16 +42,17 @@ function formatearSolicitud(s) {
     message: s.message,
     date: s.date || 'Reciente',
     status: s.status,
-    articuloId: String(s.articuloId),
+    articuloId: artId,
     articuloOfrecidoId: s.articuloOfrecidoId ? String(s.articuloOfrecidoId) : undefined,
     solicitanteId: String(s.solicitanteId),
     destinatarioId: String(s.destinatarioId),
     calificacion: s.calificacion ?? null,
+    isFavorite: Boolean(artId && setFavoritos.has(artId)),
   };
 }
 
 async function listarDeUsuario(usuarioId) {
-  const [enviadas, recibidas, historial, favoritos] = await Promise.all([
+  const [enviadas, recibidas, historial, favoritos, favoritosDocs] = await Promise.all([
     Solicitud.find({ solicitanteId: usuarioId, status: { $in: ESTADOS_EN_CURSO } }).sort({ createdAt: -1 }),
     Solicitud.find({ destinatarioId: usuarioId, status: { $in: ESTADOS_EN_CURSO } }).sort({ createdAt: -1 }),
     Solicitud.find({
@@ -58,12 +60,15 @@ async function listarDeUsuario(usuarioId) {
       status: { $in: ESTADOS_HISTORIAL },
     }).sort({ createdAt: -1 }),
     Favorito.countDocuments({ usuarioId }),
+    Favorito.find({ usuarioId }, 'articuloId'),
   ]);
 
+  const setFavoritos = new Set((favoritosDocs || []).map((f) => String(f.articuloId)));
+
   return {
-    enviadas: enviadas.map(formatearSolicitud),
-    recibidas: recibidas.map(formatearSolicitud),
-    historial: historial.map(formatearSolicitud),
+    enviadas: enviadas.map((s) => formatearSolicitud(s, setFavoritos)),
+    recibidas: recibidas.map((s) => formatearSolicitud(s, setFavoritos)),
+    historial: historial.map((s) => formatearSolicitud(s, setFavoritos)),
     favoritos,
   };
 }
