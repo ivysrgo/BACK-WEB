@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Favorito = require('../models/favorito.models');
 const Publicacion = require('../models/publicacion.models');
 const Solicitud = require('../models/solicitud.models');
+const Usuario = require('../models/usuario.models');
 const HttpError = require('../utils/HttpError');
 
 const MILISEGUNDOS_POR_DIA = 86_400_000;
