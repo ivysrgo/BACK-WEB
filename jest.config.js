@@ -1,0 +1,20 @@
+module.exports = {
+  testEnvironment: 'node',
+  testMatch: ['**/__tests__/**/*.test.js'],
+  clearMocks: true,
+  restoreMocks: true,
+  verbose: true,
+  collectCoverage: true,
+  collectCoverageFrom: [
+    'src/controllers/auth.controller.js',
+    'src/controllers/publicaciones.controller.js',
+    'src/controllers/solicitudes.controller.js',
+    'src/services/auth.service.js',
+    'src/services/publicaciones.service.js',
+    'src/middlewares/auth.middleware.js',
+    'src/middlewares/manejarErrores.js',
+    'src/middlewares/validarErrores.js',
+    'src/utils/HttpError.js',
+  ],
+  coverageReporters: ['text', 'text-summary'],
+};
