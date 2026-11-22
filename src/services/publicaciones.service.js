@@ -1,8 +1,35 @@
 const Publicacion = require('../models/publicacion.models');
 const Solicitud = require('../models/solicitud.models');
 const Favorito = require('../models/favorito.models');
+const notificacionesService = require('./notificaciones.service');
 const HttpError = require('../utils/HttpError');
 const { guardarImagenesPublicacion, eliminarImagenesPublicacion } = require('../utils/imagenesPublicacion');
+
+function calcularDiasTranscurridos(publicacion) {
+  const fechaReferencia = publicacion.createdAt || publicacion.publishedAt;
+  const diasCalculados = fechaReferencia
+    ? Math.floor((Date.now() - new Date(fechaReferencia).getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
+  return Math.max(publicacion.daysElapsed || 0, diasCalculados, 0);
+}
+
+function procesarCaducidad(publicacion) {
+  if (!publicacion) return publicacion;
+  const diasPasados = calcularDiasTranscurridos(publicacion);
+  const totalDias = publicacion.expirationDays !== undefined ? publicacion.expirationDays : 30;
+
+  // Si ya transcurrió el tiempo de caducidad y aún está Disponible o Reservado
+  if (totalDias <= 0 || diasPasados >= totalDias) {
+    if (publicacion.status === 'Disponible' || publicacion.status === 'Reservado') {
+      publicacion.status = 'Caducado';
+      if (typeof publicacion.save === 'function') {
+        publicacion.daysElapsed = diasPasados;
+        publicacion.save().catch((err) => console.warn('Error al persistir estado Caducado:', err.message));
+      }
+    }
+  }
+  return publicacion;
+}
 
 async function listar(filtros = {}) {
   const query = {};
@@ -38,14 +65,16 @@ async function listar(filtros = {}) {
     ];
   }
 
-  return await Publicacion.find(query).sort({ createdAt: -1 });
+  const publicaciones = await Publicacion.find(query).sort({ createdAt: -1 });
+  return publicaciones.map(procesarCaducidad);
 }
 
 async function listarDeUsuario(usuarioId) {
-  return await Publicacion.find({
+  const publicaciones = await Publicacion.find({
     usuarioId,
     status: { $ne: 'Intercambiado' },
   }).sort({ createdAt: -1 });
+  return publicaciones.map(procesarCaducidad);
 }
 
 async function obtener(id) {
@@ -53,7 +82,7 @@ async function obtener(id) {
   if (!publicacion) {
     throw new HttpError(404, 'Publicación no encontrada');
   }
-  return publicacion;
+  return procesarCaducidad(publicacion);
 }
 
 async function crear(datos) {

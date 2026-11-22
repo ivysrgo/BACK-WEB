@@ -58,7 +58,8 @@ async function listarDeUsuario(usuarioParam) {
     }
 
     publicacionesComunidad.forEach((pub) => {
-      const diasRestantes = Math.max(0, (pub.expirationDays || 30) - diasTranscurridos(pub));
+      const expirationDays = pub.expirationDays !== undefined ? pub.expirationDays : 30;
+      const diasRestantes = Math.max(0, expirationDays - diasTranscurridos(pub));
       if (diasRestantes <= 5) {
         notificacionesAdmin.push({
           id: `caducidad-${pub.id}`,
@@ -98,7 +99,8 @@ async function listarDeUsuario(usuarioParam) {
   publicaciones.forEach((publicacion) => {
     const id = publicacion.id;
     const pendientes = pendientesPorArticulo.get(id) || 0;
-    const diasRestantes = Math.max(0, (publicacion.expirationDays || 30) - diasTranscurridos(publicacion));
+    const expDays = publicacion.expirationDays !== undefined ? publicacion.expirationDays : 30;
+    const diasRestantes = Math.max(0, expDays - diasTranscurridos(publicacion));
     const textoCaducidad = diasRestantes === 1 ? '1 día para caducar' : `${diasRestantes} días para caducar`;
 
     if (pendientes > 0) {

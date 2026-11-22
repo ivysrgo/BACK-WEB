@@ -50,7 +50,7 @@ const publicacionSchema = new mongoose.Schema(
     expirationDays: {
       type: Number,
       default: 30,
-      min: 1,
+      min: 0,
     },
     imageUrl: {
       type: String,

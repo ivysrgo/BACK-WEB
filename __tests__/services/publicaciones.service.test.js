@@ -61,6 +61,23 @@ describe('Servicio: publicaciones.service', () => {
       expect(res).toEqual(mockPub);
     });
 
+    it('debe procesar caducidad automáticamente si expirationDays <= 0', async () => {
+      const mockSave = jest.fn().mockResolvedValue({});
+      const mockPub = {
+        _id: 'pub-caducada',
+        title: 'Mesa Caducada',
+        status: 'Disponible',
+        expirationDays: 0,
+        createdAt: new Date(),
+        save: mockSave,
+      };
+      Publicacion.findById.mockResolvedValue(mockPub);
+
+      const res = await servicio.obtener('pub-caducada');
+      expect(res.status).toBe('Caducado');
+      expect(mockSave).toHaveBeenCalled();
+    });
+
     it('debe lanzar HttpError(404) si la publicación no existe', async () => {
       Publicacion.findById.mockResolvedValue(null);
 

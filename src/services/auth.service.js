@@ -333,6 +333,12 @@ async function obtenerPerfilPublico(usuarioId) {
       const diasPublicado = p.createdAt
         ? Math.floor((Date.now() - new Date(p.createdAt).getTime()) / 86_400_000)
         : 0;
+      const daysElapsed = Math.max(p.daysElapsed || 0, diasPublicado);
+      const expirationDays = p.expirationDays !== undefined ? p.expirationDays : 30;
+      let status = p.status;
+      if ((expirationDays <= 0 || daysElapsed >= expirationDays) && (status === 'Disponible' || status === 'Reservado')) {
+        status = 'Caducado';
+      }
       return {
         id: String(p._id),
         title: p.title,
@@ -341,10 +347,10 @@ async function obtenerPerfilPublico(usuarioId) {
         description: p.description,
         imageUrl: p.imageUrl,
         imageUrls: p.imageUrls,
-        status: p.status,
+        status,
         condition: p.condition,
-        daysElapsed: Math.max(0, diasPublicado),
-        expirationDays: p.expirationDays || 30,
+        daysElapsed,
+        expirationDays,
         createdAt: p.createdAt,
       };
     }),
