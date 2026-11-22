@@ -1,12 +1,15 @@
 const { requerirAdmin } = require('../../src/middlewares/auth.middleware');
 const publicacionesService = require('../../src/services/publicaciones.service');
+const authService = require('../../src/services/auth.service');
 const Publicacion = require('../../src/models/publicacion.models');
 const Favorito = require('../../src/models/favorito.models');
+const Usuario = require('../../src/models/usuario.models');
 const HttpError = require('../../src/utils/HttpError');
 
 jest.mock('../../src/models/publicacion.models');
 jest.mock('../../src/models/favorito.models');
 jest.mock('../../src/models/solicitud.models');
+jest.mock('../../src/models/usuario.models');
 jest.mock('../../src/services/notificaciones.service');
 
 /**
@@ -21,7 +24,7 @@ jest.mock('../../src/services/notificaciones.service');
  * Técnicas aplicadas:
  * 1. Matriz de Control de Acceso Basada en Roles (RBAC Matrix)
  * 2. Pruebas de Integridad Referencial y Eliminación en Cascada (Cascading Deletes)
- * 3. Máquina de Estados y Protección de Privacidad en DTOs
+ * 3. Máquina de Estados y Protección de Privacidad en DTOs y Cuentas (Bloqueo, PIN, Perfil)
  */
 
 describe('Suite de Pruebas: CAJA GRIS (Grey-Box)', () => {
@@ -131,6 +134,235 @@ describe('Suite de Pruebas: CAJA GRIS (Grey-Box)', () => {
 
       expect(Publicacion.findByIdAndDelete).toHaveBeenCalledWith('pub-100');
       expect(Favorito.deleteMany).toHaveBeenCalledWith({ articuloId: 'pub-100' });
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // 3. MÁQUINA DE ESTADOS Y SEGURIDAD: auth.service (Cuentas, Bloqueos, PIN)
+  // --------------------------------------------------------------------------
+  describe('Máquina de Estados Interna: auth.service', () => {
+    it('[Login]: Rechaza si el usuario no existe', async () => {
+      Usuario.findOne.mockResolvedValue(null);
+      await expect(
+        authService.login({ correo: 'nadie@test.com', contrasena: '123' })
+      ).rejects.toThrow(HttpError);
+    });
+
+    it('[Login]: Rechaza si el usuario se encuentra suspendido por el sistema', async () => {
+      Usuario.findOne.mockResolvedValue({
+        correo: 'suspendido@test.com',
+        suspendido: true,
+      });
+      await expect(
+        authService.login({ correo: 'suspendido@test.com', contrasena: '123' })
+      ).rejects.toThrow(expect.objectContaining({ statusCode: 403 }));
+    });
+
+    it('[Login]: Rechaza si el usuario se encuentra temporalmente bloqueado', async () => {
+      Usuario.findOne.mockResolvedValue({
+        correo: 'bloqueado@test.com',
+        suspendido: false,
+        estaBloqueado: () => true,
+      });
+      await expect(
+        authService.login({ correo: 'bloqueado@test.com', contrasena: '123' })
+      ).rejects.toThrow(expect.objectContaining({ statusCode: 403 }));
+    });
+
+    it('[Login]: Incrementa intentos fallidos y bloquea al 3er intento erróneo', async () => {
+      const mockUser = {
+        correo: 'prueba@test.com',
+        suspendido: false,
+        intentosFallidos: 2,
+        bloqueado: false,
+        estaBloqueado: () => false,
+        compararContrasena: jest.fn().mockResolvedValue(false),
+        save: jest.fn().mockResolvedValue({}),
+      };
+      Usuario.findOne.mockResolvedValue(mockUser);
+
+      await expect(
+        authService.login({ correo: 'prueba@test.com', contrasena: 'mal' })
+      ).rejects.toThrow(expect.objectContaining({ statusCode: 403 }));
+
+      expect(mockUser.bloqueado).toBe(true);
+      expect(mockUser.save).toHaveBeenCalled();
+    });
+
+    it('[Login]: Exitoso para rol Administrador y Usuario regular', async () => {
+      const mockUser = {
+        id: 'usr-admin-id',
+        nombre: 'Admin General',
+        correo: 'admin@ecogolgi.com',
+        role: 'Administrador',
+        suspendido: false,
+        bloqueado: true,
+        intentosFallidos: 1,
+        rating: 4.8,
+        ratingCount: 5,
+        estaBloqueado: () => false,
+        compararContrasena: jest.fn().mockResolvedValue(true),
+        save: jest.fn().mockResolvedValue({}),
+      };
+      Usuario.findOne.mockResolvedValue(mockUser);
+
+      const res = await authService.login({ correo: 'admin@ecogolgi.com', contrasena: 'Admin123' });
+
+      expect(res.token).toBeDefined();
+      expect(res.usuario.role).toBe('admin');
+      expect(res.usuario.rating).toBe(4.8);
+      expect(mockUser.bloqueado).toBe(false);
+      expect(mockUser.intentosFallidos).toBe(0);
+    });
+
+    it('[Registro]: Rechaza si el correo ya existe, y registra exitosamente si es nuevo', async () => {
+      Usuario.findOne.mockResolvedValueOnce({ correo: 'duplicado@test.com' });
+      await expect(
+        authService.registrar({ nombre: 'Juan', correo: 'duplicado@test.com', contrasena: '123456' })
+      ).rejects.toThrow(expect.objectContaining({ statusCode: 409 }));
+
+      // Registro exitoso
+      Usuario.findOne.mockResolvedValueOnce(null);
+      Usuario.mockImplementation((data) => ({
+        ...data,
+        id: 'new-user-id',
+        save: jest.fn().mockResolvedValue({}),
+      }));
+
+      const nuevo = await authService.registrar({
+        nombre: 'Pedro',
+        correo: 'pedro@test.com',
+        contrasena: '123456',
+        phone: '3001234567',
+      });
+      expect(nuevo.token).toBeDefined();
+      expect(nuevo.usuario.nombre).toBe('Pedro');
+    });
+
+    it('[Perfil]: Obtiene perfil autenticado y maneja 404', async () => {
+      Usuario.findById.mockResolvedValueOnce(null);
+      await expect(authService.obtenerPerfil('inexistente')).rejects.toThrow(HttpError);
+
+      Usuario.findById.mockResolvedValueOnce({
+        id: 'u-1',
+        nombre: 'Maria',
+        correo: 'maria@test.com',
+        role: 'user',
+        ratingCount: 0,
+      });
+      const perfil = await authService.obtenerPerfil('u-1');
+      expect(perfil.nombre).toBe('Maria');
+      expect(perfil.rating).toBe(0);
+    });
+
+    it('[Recuperación de Contraseña]: Solicitar PIN, verificar PIN y restablecer contraseña', async () => {
+      // 1. Solicitar PIN
+      Usuario.findOne.mockResolvedValueOnce(null);
+      await expect(authService.solicitarRecuperacion('nadie@test.com')).rejects.toThrow(HttpError);
+
+      const mockRecuperar = {
+        correo: 'maria@test.com',
+        save: jest.fn().mockResolvedValue({}),
+      };
+      Usuario.findOne.mockResolvedValueOnce(mockRecuperar);
+      const resSol = await authService.solicitarRecuperacion('maria@test.com');
+      expect(mockRecuperar.pinRecuperacion).toBe('1234');
+      expect(resSol.pinSimulado).toBe('1234');
+
+      // 2. Verificar PIN
+      Usuario.findOne.mockResolvedValueOnce({ pinRecuperacion: '1234' });
+      const resVer = await authService.verificarCodigo('maria@test.com', '1234');
+      expect(resVer.mensaje).toMatch(/verificado correctamente/i);
+
+      Usuario.findOne.mockResolvedValueOnce({ pinRecuperacion: '9999' });
+      await expect(authService.verificarCodigo('maria@test.com', '0000')).rejects.toThrow(HttpError);
+
+      // 3. Restablecer Contraseña
+      const mockRestablecer = {
+        pinRecuperacion: '1234',
+        bloqueado: true,
+        save: jest.fn().mockResolvedValue({}),
+      };
+      Usuario.findOne.mockResolvedValueOnce(mockRestablecer);
+      const resReset = await authService.restablecerContrasena('maria@test.com', '1234', 'nueva123');
+      expect(resReset.mensaje).toMatch(/restablecida exitosamente/i);
+      expect(mockRestablecer.bloqueado).toBe(false);
+      expect(mockRestablecer.contrasena).toBe('nueva123');
+    });
+
+    it('[Cambio de Contraseña]: Valida contraseña anterior y actualiza', async () => {
+      const mockCambio = {
+        compararContrasena: jest.fn().mockResolvedValue(false),
+        save: jest.fn(),
+      };
+      Usuario.findById.mockResolvedValueOnce(mockCambio);
+      await expect(authService.cambiarContrasena('u-1', 'erronea', 'nueva123')).rejects.toThrow(HttpError);
+
+      mockCambio.compararContrasena.mockResolvedValueOnce(true);
+      mockCambio.save.mockResolvedValueOnce({});
+      Usuario.findById.mockResolvedValueOnce(mockCambio);
+      const resCambio = await authService.cambiarContrasena('u-1', 'correcta', 'nueva123');
+      expect(resCambio.mensaje).toMatch(/actualizada correctamente/i);
+    });
+
+    it('[Actualizar Perfil]: Control de duplicidad de correo y actualización de campos', async () => {
+      const mockPerfil = {
+        _id: 'u-1',
+        correo: 'actual@test.com',
+        nombre: 'Viejo Nombre',
+        save: jest.fn().mockResolvedValue({}),
+      };
+      Usuario.findById.mockResolvedValue(mockPerfil);
+      Usuario.findOne.mockResolvedValueOnce({ _id: 'u-otro', correo: 'tomado@test.com' });
+
+      // Correo ya tomado por otro
+      await expect(
+        authService.actualizarPerfil('u-1', { correo: 'tomado@test.com' })
+      ).rejects.toThrow(expect.objectContaining({ statusCode: 409 }));
+
+      // Actualización limpia
+      Usuario.findOne.mockResolvedValueOnce(null);
+      const perfilActualizado = await authService.actualizarPerfil('u-1', {
+        nombre: 'Nuevo Nombre',
+        correo: 'nuevo@test.com',
+        phone: '12345678',
+        avatarUrl: 'https://img.com/avatar.png',
+      });
+      expect(perfilActualizado.nombre).toBe('Nuevo Nombre');
+      expect(mockPerfil.save).toHaveBeenCalled();
+    });
+
+    it('[Perfil Público]: Obtiene perfil público con cálculo de caducidad de publicaciones', async () => {
+      const mockPublicaciones = [
+        {
+          _id: 'pub-x',
+          title: 'Zapatos',
+          status: 'Disponible',
+          expirationDays: 0,
+          createdAt: new Date(),
+        },
+      ];
+      Publicacion.find.mockReturnValue({
+        sort: jest.fn().mockResolvedValue(mockPublicaciones),
+      });
+      Usuario.findById.mockResolvedValue({
+        _id: '507f1f77bcf86cd799439011',
+        nombre: 'Luis',
+        correo: 'luis@test.com',
+        role: 'user',
+      });
+
+      const resPub = await authService.obtenerPerfilPublico('507f1f77bcf86cd799439011');
+      expect(resPub.usuario.nombre).toBe('Luis');
+      expect(resPub.publicaciones[0].status).toBe('Caducado');
+    });
+
+    it('[Semillero de Usuarios]: Inicializa administradores y miembros si no existen', async () => {
+      Usuario.findOne.mockResolvedValue(null);
+      Usuario.create = jest.fn().mockResolvedValue({});
+
+      await authService.sembrarUsuariosIniciales();
+      expect(Usuario.create).toHaveBeenCalled();
     });
   });
 });
