@@ -128,7 +128,7 @@ async function actualizar(id, cambios, usuario) {
   // Si el artículo fue donado a Unidona, se crea una notificación para el propietario
   if (cambios.status === 'Donado' && estadoAnterior !== 'Donado') {
     const targetUserId = publicacion.usuarioId || (usuario ? (usuario._id || usuario.id) : null);
-    if (targetUserId) {
+    if (targetUserId && typeof notificacionesService.crearNotificacion === 'function') {
       await notificacionesService.crearNotificacion({
         usuarioId: targetUserId,
         title: 'Artículo donado a Unidona',

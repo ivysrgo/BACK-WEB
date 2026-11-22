@@ -18,6 +18,7 @@ describe('Controlador: solicitudes.controller', () => {
     res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn().mockReturnThis(),
+      send: jest.fn().mockReturnThis(),
     };
     next = jest.fn();
     jest.clearAllMocks();
@@ -67,6 +68,46 @@ describe('Controlador: solicitudes.controller', () => {
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith(mockData);
     });
+
+    it('debe propagar error a next si listarDeUsuario falla', async () => {
+      const err = new Error('Error al listar');
+      servicio.listarDeUsuario.mockRejectedValue(err);
+
+      await controller.listarMias(req, res, next);
+      expect(next).toHaveBeenCalledWith(err);
+    });
+  });
+
+  describe('obtener', () => {
+    it('debe responder 200 con la solicitud encontrada', async () => {
+      req.params.id = 'sol-123';
+      const mockSol = { id: 'sol-123', title: 'Solicitud' };
+      servicio.obtener.mockResolvedValue(mockSol);
+
+      await controller.obtener(req, res, next);
+
+      expect(servicio.obtener).toHaveBeenCalledWith('sol-123', 'user-1');
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(mockSol);
+    });
+
+    it('debe soportar usuario nulo en obtener', async () => {
+      req.usuario = null;
+      req.params.id = 'sol-123';
+      servicio.obtener.mockResolvedValue({ id: 'sol-123' });
+
+      await controller.obtener(req, res, next);
+      expect(servicio.obtener).toHaveBeenCalledWith('sol-123', null);
+    });
+
+    it('debe llamar a next si obtener falla', async () => {
+      req.params.id = 'sol-123';
+      const err = new Error('No encontrada');
+      servicio.obtener.mockRejectedValue(err);
+
+      await controller.obtener(req, res, next);
+      expect(next).toHaveBeenCalledWith(err);
+    });
   });
 
   describe('crear', () => {
@@ -79,6 +120,14 @@ describe('Controlador: solicitudes.controller', () => {
 
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith(creada);
+    });
+
+    it('debe llamar a next si crear falla', async () => {
+      const err = new Error('Error al crear');
+      servicio.crear.mockRejectedValue(err);
+
+      await controller.crear(req, res, next);
+      expect(next).toHaveBeenCalledWith(err);
     });
   });
 
@@ -94,6 +143,91 @@ describe('Controlador: solicitudes.controller', () => {
       expect(servicio.actualizarEstado).toHaveBeenCalledWith('sol-1', 'Aceptado', 'user-1');
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith(actualizada);
+    });
+
+    it('debe soportar req.body.estado y usuario nulo', async () => {
+      req.usuario = null;
+      req.params.id = 'sol-2';
+      req.body = { estado: 'Donado' };
+      servicio.actualizarEstado.mockResolvedValue({ id: 'sol-2', status: 'Donado' });
+
+      await controller.actualizar(req, res, next);
+      expect(servicio.actualizarEstado).toHaveBeenCalledWith('sol-2', 'Donado', null);
+    });
+
+    it('debe llamar a next si actualizar falla', async () => {
+      req.params.id = 'sol-1';
+      req.body = { status: 'Rechazado' };
+      const err = new Error('Error al actualizar');
+      servicio.actualizarEstado.mockRejectedValue(err);
+
+      await controller.actualizar(req, res, next);
+      expect(next).toHaveBeenCalledWith(err);
+    });
+  });
+
+  describe('confirmarIntercambio', () => {
+    it('debe responder 200 con el intercambio confirmado', async () => {
+      req.params.id = 'sol-1';
+      req.body = { calificacion: 5 };
+      const confirmada = { id: 'sol-1', status: 'Donado' };
+      servicio.confirmarIntercambio.mockResolvedValue(confirmada);
+
+      await controller.confirmarIntercambio(req, res, next);
+
+      expect(servicio.confirmarIntercambio).toHaveBeenCalledWith('sol-1', 5, 'user-1');
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(confirmada);
+    });
+
+    it('debe soportar usuario nulo en confirmarIntercambio', async () => {
+      req.usuario = null;
+      req.params.id = 'sol-1';
+      req.body = { calificacion: 4 };
+      servicio.confirmarIntercambio.mockResolvedValue({ id: 'sol-1' });
+
+      await controller.confirmarIntercambio(req, res, next);
+      expect(servicio.confirmarIntercambio).toHaveBeenCalledWith('sol-1', 4, null);
+    });
+
+    it('debe llamar a next si confirmarIntercambio falla', async () => {
+      const err = new Error('Error al confirmar');
+      servicio.confirmarIntercambio.mockRejectedValue(err);
+
+      await controller.confirmarIntercambio(req, res, next);
+      expect(next).toHaveBeenCalledWith(err);
+    });
+  });
+
+  describe('eliminar', () => {
+    it('debe responder 204 sin contenido al eliminar solicitud', async () => {
+      req.params.id = 'sol-1';
+      servicio.eliminar.mockResolvedValue();
+
+      await controller.eliminar(req, res, next);
+
+      expect(servicio.eliminar).toHaveBeenCalledWith('sol-1', 'user-1');
+      expect(res.status).toHaveBeenCalledWith(204);
+      expect(res.send).toHaveBeenCalled();
+    });
+
+    it('debe soportar usuario nulo en eliminar', async () => {
+      req.usuario = null;
+      req.params.id = 'sol-9';
+      servicio.eliminar.mockResolvedValue();
+
+      await controller.eliminar(req, res, next);
+      expect(servicio.eliminar).toHaveBeenCalledWith('sol-9', null);
+      expect(res.status).toHaveBeenCalledWith(204);
+    });
+
+    it('debe llamar a next si eliminar falla', async () => {
+      req.params.id = 'sol-1';
+      const err = new Error('Error al eliminar');
+      servicio.eliminar.mockRejectedValue(err);
+
+      await controller.eliminar(req, res, next);
+      expect(next).toHaveBeenCalledWith(err);
     });
   });
 });

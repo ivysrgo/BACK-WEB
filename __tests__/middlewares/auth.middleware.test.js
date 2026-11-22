@@ -2,6 +2,7 @@ const {
   verificarToken,
   verificarTokenOpcional,
   requerirAdmin,
+  requerirRol,
 } = require('../../src/middlewares/auth.middleware');
 const Usuario = require('../../src/models/usuario.models');
 const jwt = require('jsonwebtoken');
@@ -43,6 +44,20 @@ describe('Middleware: auth.middleware', () => {
       const error = next.mock.calls[0][0];
       expect(error.statusCode).toBe(401);
       expect(error.message).toMatch(/La sesión ha expirado/);
+    });
+
+    it('debe lanzar 401 si el token es inválido o alterado', async () => {
+      req.headers.authorization = 'Bearer token-alterado';
+      jwt.verify.mockImplementation(() => {
+        const err = new Error('invalid signature');
+        err.name = 'JsonWebTokenError';
+        throw err;
+      });
+
+      await verificarToken(req, res, next);
+      const error = next.mock.calls[0][0];
+      expect(error.statusCode).toBe(401);
+      expect(error.message).toMatch(/Token de autenticación inválido o alterado/);
     });
 
     it('debe lanzar 401 si el usuario no existe en la base de datos', async () => {
@@ -122,6 +137,58 @@ describe('Middleware: auth.middleware', () => {
       await verificarTokenOpcional(req, res, next);
       expect(req.usuario).toEqual(mockUsuario);
       expect(next).toHaveBeenCalled();
+    });
+
+    it('debe asignar null si jwt.verify falla en opcional', async () => {
+      req.headers.authorization = 'Bearer token-invalido';
+      jwt.verify.mockImplementation(() => {
+        throw new Error('invalid');
+      });
+
+      await verificarTokenOpcional(req, res, next);
+      expect(req.usuario).toBeNull();
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('debe asignar null si Usuario.findById falla en opcional', async () => {
+      req.headers.authorization = 'Bearer token-valido';
+      jwt.verify.mockReturnValue({ id: 'user-123' });
+      Usuario.findById.mockRejectedValue(new Error('DB error'));
+
+      await verificarTokenOpcional(req, res, next);
+      expect(req.usuario).toBeNull();
+      expect(next).toHaveBeenCalled();
+    });
+  });
+
+  describe('requerirRol', () => {
+    it('debe lanzar 401 si req.usuario no existe', () => {
+      const middleware = requerirRol('admin');
+      middleware(req, res, next);
+      const error = next.mock.calls[0][0];
+      expect(error.statusCode).toBe(401);
+    });
+
+    it('debe permitir continuar si el rol coincide', () => {
+      req.usuario = { role: 'admin' };
+      const middleware = requerirRol('admin');
+      middleware(req, res, next);
+      expect(next).toHaveBeenCalledWith();
+    });
+
+    it('debe normalizar Administrador y permitir continuar', () => {
+      req.usuario = { role: 'Administrador' };
+      const middleware = requerirRol('admin');
+      middleware(req, res, next);
+      expect(next).toHaveBeenCalledWith();
+    });
+
+    it('debe lanzar 403 si el rol no está permitido', () => {
+      req.usuario = { role: 'user' };
+      const middleware = requerirRol('admin');
+      middleware(req, res, next);
+      const error = next.mock.calls[0][0];
+      expect(error.statusCode).toBe(403);
     });
   });
 

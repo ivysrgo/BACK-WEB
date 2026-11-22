@@ -8,7 +8,10 @@ const notificacionesService = require('../../src/services/notificaciones.service
 jest.mock('../../src/models/publicacion.models');
 jest.mock('../../src/models/favorito.models');
 jest.mock('../../src/models/solicitud.models');
-jest.mock('../../src/services/notificaciones.service');
+jest.mock('../../src/services/notificaciones.service', () => ({
+  listarDeUsuario: jest.fn().mockResolvedValue([]),
+  crearNotificacion: jest.fn().mockResolvedValue({}),
+}));
 jest.mock('../../src/utils/imagenesPublicacion', () => ({
   guardarImagenesPublicacion: jest.fn().mockResolvedValue([{ url: '/uploads/foto1.jpg' }]),
   eliminarImagenesPublicacion: jest.fn().mockResolvedValue(true),
@@ -49,6 +52,34 @@ describe('Servicio: publicaciones.service', () => {
           $or: expect.any(Array),
         })
       );
+    });
+
+    it('debe aplicar filtro de modalidad', async () => {
+      const mockQuery = { sort: jest.fn().mockResolvedValue([]) };
+      Publicacion.find.mockReturnValue(mockQuery);
+
+      await servicio.listar({ modalidad: 'Donación' });
+
+      expect(Publicacion.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modality: expect.any(RegExp),
+        })
+      );
+    });
+  });
+
+  describe('listarDeUsuario', () => {
+    it('debe listar publicaciones asociadas al usuario', async () => {
+      const mockQuery = { sort: jest.fn().mockResolvedValue([{ id: 'pub-user-1', status: 'Disponible' }]) };
+      Publicacion.find.mockReturnValue(mockQuery);
+
+      const res = await servicio.listarDeUsuario('usr-10');
+
+      expect(Publicacion.find).toHaveBeenCalledWith({
+        usuarioId: 'usr-10',
+        status: { $ne: 'Intercambiado' },
+      });
+      expect(res).toHaveLength(1);
     });
   });
 
@@ -110,6 +141,21 @@ describe('Servicio: publicaciones.service', () => {
       expect(mockSave).toHaveBeenCalled();
       expect(resultado.imageUrl).toBe('/uploads/foto1.jpg');
     });
+
+    it('debe revertir imagenes si falla el guardado en base de datos', async () => {
+      const { eliminarImagenesPublicacion } = require('../../src/utils/imagenesPublicacion');
+      const datos = {
+        title: 'Chaqueta Error',
+        images: ['data:image/png;base64,...'],
+      };
+
+      Publicacion.mockImplementation(() => ({
+        save: jest.fn().mockRejectedValue(new Error('Mongo Error')),
+      }));
+
+      await expect(servicio.crear(datos)).rejects.toThrow('Mongo Error');
+      expect(eliminarImagenesPublicacion).toHaveBeenCalled();
+    });
   });
 
   describe('actualizar', () => {
@@ -164,6 +210,31 @@ describe('Servicio: publicaciones.service', () => {
       expect(mockPub.save).toHaveBeenCalled();
       expect(resultado.title).toBe('Titulo Actualizado');
     });
+
+    it('debe crear notificación si el estado cambia a Donado', async () => {
+      const mockPub = {
+        _id: 'pub-don',
+        id: 'pub-don',
+        usuarioId: 'user-duenio-1',
+        title: 'Mesa Donada',
+        status: 'Disponible',
+        save: jest.fn().mockResolvedValue({ _id: 'pub-don', status: 'Donado' }),
+      };
+      Publicacion.findById.mockResolvedValue(mockPub);
+
+      await servicio.actualizar(
+        'pub-don',
+        { status: 'Donado' },
+        { _id: 'user-duenio-1', role: 'user' }
+      );
+
+      expect(notificacionesService.crearNotificacion).toHaveBeenCalledWith(
+        expect.objectContaining({
+          usuarioId: 'user-duenio-1',
+          type: 'donacion',
+        })
+      );
+    });
   });
 
   describe('eliminar', () => {
@@ -201,6 +272,35 @@ describe('Servicio: publicaciones.service', () => {
       expect(Favorito.deleteMany).toHaveBeenCalledWith({ articuloId: 'pub-1' });
       expect(Publicacion.findByIdAndDelete).toHaveBeenCalledWith('pub-1');
       expect(resultado).toEqual(mockPub);
+    });
+
+    it('debe tolerar advertencia si eliminarImagenesPublicacion falla', async () => {
+      const { eliminarImagenesPublicacion } = require('../../src/utils/imagenesPublicacion');
+      eliminarImagenesPublicacion.mockRejectedValueOnce(new Error('Fallo al borrar archivos'));
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const mockPub = {
+        _id: 'pub-2',
+        usuarioId: 'user-admin',
+        imageUrls: ['/uploads/img.jpg'],
+      };
+      Publicacion.findById.mockResolvedValue(mockPub);
+      Publicacion.findByIdAndDelete.mockResolvedValue(mockPub);
+      Favorito.deleteMany.mockResolvedValue({ deletedCount: 0 });
+
+      await servicio.eliminar('pub-2', { role: 'admin' });
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe('sembrarDatosIniciales', () => {
+    it('debe insertar publicaciones faltantes si no existen en la BD', async () => {
+      Publicacion.distinct = jest.fn().mockResolvedValue([]);
+      Publicacion.insertMany = jest.fn().mockResolvedValue([]);
+
+      await servicio.sembrarDatosIniciales();
+      expect(Publicacion.insertMany).toHaveBeenCalled();
     });
   });
 

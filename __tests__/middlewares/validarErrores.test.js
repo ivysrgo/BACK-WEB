@@ -65,16 +65,40 @@ describe('Middleware: validarErrores', () => {
         title: 'Nuevo título válido',
         status: 'Donado',
         talla: 'M',
+        categoria: 'libros',
+        modalidad: 'intercambio',
+        estadoFisico: 'Como nuevo',
+        descripcion: 'Una descripción',
+        detalles: 'Detalle',
+        imagenUrl: '/img.png',
+        requests: 5,
+        daysElapsed: 10,
+        tags: ['libro'],
+        genero: 'Unisex',
+        clima: 'Cálido',
+        autorizaDonacion: true,
       };
 
       validarCambioPublicacion(req, res, next);
 
       expect(next).toHaveBeenCalledTimes(1);
-      expect(req.body).toEqual({
-        title: 'Nuevo título válido',
-        status: 'Donado',
-        talla: 'M',
-      });
+      expect(req.body.title).toBe('Nuevo título válido');
+      expect(req.body.category).toBe('LIBROS');
+      expect(req.body.modality).toBe('Intercambio');
+      expect(req.body.condition).toBe('Como nuevo');
+      expect(req.body.requests).toBe(5);
+    });
+
+    it('debe lanzar 400 si el título en actualización tiene menos de 3 caracteres', () => {
+      req.body = { title: 'ab' };
+      expect(() => validarCambioPublicacion(req, res, next)).toThrow(/al menos 3 caracteres/);
+    });
+
+    it('debe lanzar 400 si solo se envían campos desconocidos', () => {
+      req.body = { campoInexistente: 'valor' };
+      expect(() => validarCambioPublicacion(req, res, next)).toThrow(
+        'No se enviaron campos válidos para actualizar'
+      );
     });
 
     it('debe lanzar HttpError(400) si el body está vacío', () => {
@@ -165,6 +189,13 @@ describe('Middleware: validarErrores', () => {
         'La nueva contraseña debe ser diferente a la actual'
       );
     });
+
+    it('debe lanzar HttpError(400) si la nueva contraseña no cumple requisitos de seguridad', () => {
+      req.body = { contrasenaActual: 'Vieja123!', nuevaContrasena: '123' };
+      expect(() => validarCambioContrasena(req, res, next)).toThrow(
+        /como mínimo 5 caracteres/
+      );
+    });
   });
 
   describe('validarCreacionSolicitud', () => {
@@ -179,6 +210,21 @@ describe('Middleware: validarErrores', () => {
       validarCreacionSolicitud(req, res, next);
       expect(next).toHaveBeenCalledTimes(1);
       expect(req.body.type).toBe('DONACIÓN');
+    });
+
+    it('debe lanzar 400 si el título falta o es menor a 3 caracteres', () => {
+      req.body = { title: 'ab', message: 'Mensaje valido', articuloId: 'art-1' };
+      expect(() => validarCreacionSolicitud(req, res, next)).toThrow(/título es obligatorio/);
+    });
+
+    it('debe lanzar 400 si el mensaje falta o es menor a 3 caracteres', () => {
+      req.body = { title: 'Titulo Valido', message: 'ab', articuloId: 'art-1' };
+      expect(() => validarCreacionSolicitud(req, res, next)).toThrow(/mensaje es obligatorio/);
+    });
+
+    it('debe lanzar 400 si falta el articuloId', () => {
+      req.body = { title: 'Titulo Valido', message: 'Mensaje Valido' };
+      expect(() => validarCreacionSolicitud(req, res, next)).toThrow(/Debes indicar el artículo/);
     });
 
     it('debe lanzar HttpError(400) para INTERCAMBIO si falta articuloOfrecidoId', () => {

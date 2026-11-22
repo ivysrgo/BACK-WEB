@@ -70,6 +70,15 @@ describe('Controlador: auth.controller', () => {
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({ usuario: mockUsuario });
     });
+
+    it('debe llamar a next si ocurre error en perfil', async () => {
+      const err = new Error('Fallo al obtener perfil');
+      servicio.obtenerPerfil.mockRejectedValue(err);
+
+      await controller.perfil(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(err);
+    });
   });
 
   describe('forgotPassword', () => {
@@ -89,6 +98,16 @@ describe('Controlador: auth.controller', () => {
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({ mensaje: 'PIN enviado' });
     });
+
+    it('debe llamar a next si solicitarRecuperacion falla', async () => {
+      req.body = { correo: 'test@test.com' };
+      const err = new Error('Error al enviar');
+      servicio.solicitarRecuperacion.mockRejectedValue(err);
+
+      await controller.forgotPassword(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(err);
+    });
   });
 
   describe('verifyCode', () => {
@@ -107,6 +126,66 @@ describe('Controlador: auth.controller', () => {
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({ mensaje: 'Código verificado' });
     });
+
+    it('debe llamar a next si verificarCodigo falla', async () => {
+      req.body = { correo: 'test@test.com', pin: '1234' };
+      const err = new Error('Error al verificar');
+      servicio.verificarCodigo.mockRejectedValue(err);
+
+      await controller.verifyCode(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(err);
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('debe responder 400 si falta el correo o la nueva contraseña', async () => {
+      req.body = { correo: 'test@test.com' };
+      await controller.resetPassword(req, res, next);
+      expect(res.status).toHaveBeenCalledWith(400);
+    });
+
+    it('debe responder 200 al restablecer contraseña correctamente', async () => {
+      req.body = { correo: 'test@test.com', pin: '1234', nuevaContrasena: 'Nueva123!' };
+      servicio.restablecerContrasena.mockResolvedValue({ mensaje: 'Contraseña restablecida' });
+
+      await controller.resetPassword(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({ mensaje: 'Contraseña restablecida' });
+    });
+
+    it('debe llamar a next si restablecerContrasena falla', async () => {
+      req.body = { correo: 'test@test.com', pin: '1234', nuevaContrasena: 'Nueva123!' };
+      const err = new Error('Fallo al restablecer');
+      servicio.restablecerContrasena.mockRejectedValue(err);
+
+      await controller.resetPassword(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(err);
+    });
+  });
+
+  describe('cambiarContrasena', () => {
+    it('debe responder 200 al cambiar contraseña con éxito', async () => {
+      req.body = { contrasenaActual: 'Vieja123!', nuevaContrasena: 'Nueva123!' };
+      servicio.cambiarContrasena.mockResolvedValue({ mensaje: 'Contraseña actualizada' });
+
+      await controller.cambiarContrasena(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({ mensaje: 'Contraseña actualizada' });
+    });
+
+    it('debe llamar a next si cambiarContrasena falla', async () => {
+      req.body = { contrasenaActual: 'Vieja123!', nuevaContrasena: 'Nueva123!' };
+      const err = new Error('Contraseña incorrecta');
+      servicio.cambiarContrasena.mockRejectedValue(err);
+
+      await controller.cambiarContrasena(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(err);
+    });
   });
 
   describe('actualizarPerfil', () => {
@@ -122,6 +201,39 @@ describe('Controlador: auth.controller', () => {
         usuario: usuarioActualizado,
         mensaje: 'Perfil actualizado exitosamente',
       });
+    });
+
+    it('debe llamar a next si actualizarPerfil falla', async () => {
+      const err = new Error('Error al actualizar');
+      servicio.actualizarPerfil.mockRejectedValue(err);
+
+      await controller.actualizarPerfil(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(err);
+    });
+  });
+
+  describe('perfilPublico', () => {
+    it('debe responder 200 con el perfil público consultado', async () => {
+      req.params.id = 'usr-publico-1';
+      const mockPublico = { usuario: { nombre: 'Usuario Público' }, publicaciones: [] };
+      servicio.obtenerPerfilPublico.mockResolvedValue(mockPublico);
+
+      await controller.perfilPublico(req, res, next);
+
+      expect(servicio.obtenerPerfilPublico).toHaveBeenCalledWith('usr-publico-1');
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(mockPublico);
+    });
+
+    it('debe llamar a next si perfilPublico falla', async () => {
+      req.params.id = 'usr-inexistente';
+      const err = new Error('Usuario no encontrado');
+      servicio.obtenerPerfilPublico.mockRejectedValue(err);
+
+      await controller.perfilPublico(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(err);
     });
   });
 });

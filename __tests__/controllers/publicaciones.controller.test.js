@@ -46,6 +46,28 @@ describe('Controlador: publicaciones.controller', () => {
     });
   });
 
+  describe('listarMisPublicaciones', () => {
+    it('debe responder 200 con las publicaciones del usuario', async () => {
+      const mockMisPubs = [{ id: 'pub-mis-1', title: 'Mi Libro' }];
+      servicio.listarDeUsuario.mockResolvedValue(mockMisPubs);
+
+      await controller.listarMisPublicaciones(req, res, next);
+
+      expect(servicio.listarDeUsuario).toHaveBeenCalledWith('user-1');
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(mockMisPubs);
+    });
+
+    it('debe llamar a next si listarMisPublicaciones falla', async () => {
+      const error = new Error('Error al listar mis publicaciones');
+      servicio.listarDeUsuario.mockRejectedValue(error);
+
+      await controller.listarMisPublicaciones(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(error);
+    });
+  });
+
   describe('obtener', () => {
     it('debe responder 200 con la publicación solicitada', async () => {
       req.params.id = 'pub-100';
@@ -81,6 +103,14 @@ describe('Controlador: publicaciones.controller', () => {
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith(creada);
     });
+
+    it('debe llamar a next si crear falla', async () => {
+      const err = new Error('Error al crear');
+      servicio.crear.mockRejectedValue(err);
+
+      await controller.crear(req, res, next);
+      expect(next).toHaveBeenCalledWith(err);
+    });
   });
 
   describe('actualizar', () => {
@@ -95,6 +125,14 @@ describe('Controlador: publicaciones.controller', () => {
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith(actualizada);
     });
+
+    it('debe llamar a next si actualizar falla', async () => {
+      const err = new Error('Error al actualizar');
+      servicio.actualizar.mockRejectedValue(err);
+
+      await controller.actualizar(req, res, next);
+      expect(next).toHaveBeenCalledWith(err);
+    });
   });
 
   describe('eliminar', () => {
@@ -107,6 +145,14 @@ describe('Controlador: publicaciones.controller', () => {
       expect(res.status).toHaveBeenCalledWith(204);
       expect(res.send).toHaveBeenCalled();
     });
+
+    it('debe llamar a next si eliminar falla', async () => {
+      const err = new Error('Error al eliminar');
+      servicio.eliminar.mockRejectedValue(err);
+
+      await controller.eliminar(req, res, next);
+      expect(next).toHaveBeenCalledWith(err);
+    });
   });
 
   describe('obtenerEstadisticas', () => {
@@ -118,6 +164,14 @@ describe('Controlador: publicaciones.controller', () => {
 
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith(mockStats);
+    });
+
+    it('debe llamar a next si obtenerEstadisticas falla', async () => {
+      const err = new Error('Error al obtener estadísticas');
+      servicio.obtenerEstadisticas.mockRejectedValue(err);
+
+      await controller.obtenerEstadisticas(req, res, next);
+      expect(next).toHaveBeenCalledWith(err);
     });
   });
 });
